@@ -1,0 +1,917 @@
+const state = {
+  isAdmin: window.location.pathname === "/admin",
+  overview: null,
+  currentCard: null,
+  selectedChoiceId: null,
+  startedAt: 0,
+  feedback: null,
+  prefetchedNext: null,
+  prefetchedNextPromise: null,
+  parentWords: [],
+  parentWordsNeedRefresh: true,
+  parentWordsLoading: false,
+  parentWordFilter: "",
+  parentAddSubmitting: false,
+  parentAddFeedback: null,
+  audioAutoPlayTimer: null,
+  encouragement: "",
+};
+
+const ENCOURAGEMENTS = [
+  "今天学一点点，考试时就会轻松很多。",
+  "你不是在赶路，你是在一天天变厉害。",
+  "先拿下一个词，再拿下下一个词。",
+  "每次认真答一题，都是在给自己加分。",
+  "慢一点没有关系，坚持就很了不起。",
+  "今天的努力，会变成考场上的自信。",
+  "记住一个词，就是向目标走近一步。",
+  "不用一下子全会，稳稳往前就很好。",
+];
+
+const navTabs = Array.from(document.querySelectorAll(".nav-tab"));
+const views = {
+  home: document.querySelector("#homeView"),
+  study: document.querySelector("#studyView"),
+  parent: document.querySelector("#parentView"),
+};
+
+const heroCard = document.querySelector("#heroCard");
+const progressPanel = document.querySelector("#progressPanel");
+const focusWordsPanel = document.querySelector("#focusWordsPanel");
+const parentStats = document.querySelector("#parentStats");
+const parentInputPanel = document.querySelector("#parentInputPanel");
+const goalPanel = document.querySelector("#goalPanel");
+const mistakePanel = document.querySelector("#mistakePanel");
+const wordProgressPanel = document.querySelector("#wordProgressPanel");
+const studyPlanMini = document.querySelector("#studyPlanMini");
+const studyPanel = document.querySelector("#studyPanel");
+const startStudyButton = document.querySelector("#startStudyButton");
+const endStudyButton = document.querySelector("#endStudyButton");
+
+function switchView(name) {
+  if (!state.isAdmin && name === "parent") {
+    return;
+  }
+
+  navTabs.forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === name);
+  });
+
+  Object.entries(views).forEach(([key, element]) => {
+    element.classList.toggle("active", key === name);
+  });
+
+  if (name === "parent") {
+    ensureParentWords().catch((error) => {
+      console.error(error);
+    });
+  }
+}
+
+navTabs.forEach((button) => {
+  button.addEventListener("click", () => {
+    switchView(button.dataset.view);
+  });
+});
+
+function endStudySession() {
+  switchView("home");
+}
+
+endStudyButton.addEventListener("click", endStudySession);
+startStudyButton.addEventListener("click", () => {
+  switchView("study");
+  loadNextCard({ showLoading: true });
+});
+
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+    },
+    ...options,
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function formatPercent(current, total) {
+  if (!total) {
+    return "0%";
+  }
+
+  return `${Math.round((current / total) * 100)}%`;
+}
+
+function buildMetricCard(label, value, sub) {
+  return `
+    <article class="metric-card">
+      <div class="metric-label">${label}</div>
+      <div class="metric-value">${value}</div>
+      <div class="metric-sub">${sub}</div>
+    </article>
+  `;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function formatPartOfSpeechLabel(partOfSpeech) {
+  const labels = {
+    abbrev: "abbrev 缩写",
+    adj: "adj 形容词",
+    adv: "adv 副词",
+    av: "av 助动词",
+    conj: "conj 连词",
+    det: "det 限定词",
+    exclam: "exclam 感叹词",
+    mv: "mv 情态动词",
+    n: "n 名词",
+    phrv: "phr v 短语动词",
+    "phr v": "phr v 短语动词",
+    pl: "pl 复数",
+    prep: "prep 介词",
+    "prep phr": "prep phr 介词短语",
+    pron: "pron 代词",
+    sing: "sing 单数",
+    v: "v 动词",
+    custom: "自定义词",
+  };
+
+  return String(partOfSpeech || "")
+    .split(/\s*[,&]\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => labels[item] || item)
+    .join(" + ");
+}
+
+function renderHero() {
+  const { exam, plan, checkin, progress, today } = state.overview;
+  const leadingBlanks = Array.from({ length: checkin.firstWeekday }, () => null);
+  const monthCells = [...leadingBlanks, ...checkin.monthDays];
+
+  heroCard.innerHTML = `
+    <div class="hero-grid">
+      <div>
+        <div class="chip-row">
+          <span class="chip">考试日 ${exam.date}</span>
+        </div>
+        <div class="hero-title">每天学一点，也能稳稳往前走。</div>
+        <div class="hint-box soft">${state.encouragement}</div>
+        <div class="hero-metrics">
+          <div class="hero-metric">
+            <div class="metric-label">距离考试</div>
+            <div class="hero-metric-value">${exam.daysRemaining} 天</div>
+          </div>
+          <div class="hero-metric">
+            <div class="metric-label">今天进度</div>
+            <div class="hero-metric-value">${today.minutes}/${plan.targetMinutes} 分钟</div>
+          </div>
+          <div class="hero-metric">
+            <div class="metric-label">已掌握词数</div>
+            <div class="hero-metric-value">${progress.overallMastered}/${progress.totalWords}</div>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button class="primary-btn" id="heroStartButton">开始今天的学习</button>
+        </div>
+      </div>
+      <div class="checkin-card">
+        <div class="checkin-card-top">
+          <div>
+            <div class="metric-label">${checkin.monthLabel} 打卡</div>
+            <div class="checkin-streak">${checkin.currentStreak} 天</div>
+          </div>
+          <div class="checkin-best">最佳 ${checkin.bestStreak} 天</div>
+        </div>
+        <div class="week-labels">
+          <span>一</span>
+          <span>二</span>
+          <span>三</span>
+          <span>四</span>
+          <span>五</span>
+          <span>六</span>
+          <span>日</span>
+        </div>
+        <div class="hero-calendar-grid">
+          ${monthCells
+            .map(
+              (item) => `
+                ${
+                  item
+                    ? `<div class="hero-calendar-day ${item.studied ? "done" : ""} ${item.isToday ? "today" : ""}">
+                        <div class="calendar-date">${item.day}</div>
+                        <div class="calendar-mark">${item.studied ? "✓" : "·"}</div>
+                      </div>`
+                    : `<div class="hero-calendar-blank"></div>`
+                }
+              `
+            )
+            .join("")}
+        </div>
+      </div>
+    </div>
+  `;
+
+  heroCard.querySelector("#heroStartButton").addEventListener("click", () => {
+    switchView("study");
+    loadNextCard({ showLoading: true });
+  });
+}
+
+function renderProgress() {
+  const { progress, plan, config } = state.overview;
+  const spellLevels = (config?.spellPriorityLevels || ["S"]).join(" + ");
+
+  progressPanel.innerHTML = `
+    <h2>学习进度</h2>
+    <div class="progress-list">
+      <div class="progress-item">
+        <div class="progress-top">
+          <strong>全部词库</strong>
+          <span>${progress.overallMastered} / ${progress.totalWords}</span>
+        </div>
+        <div class="bar"><div class="bar-fill orange" style="width:${formatPercent(progress.overallMastered, progress.totalWords)}"></div></div>
+      </div>
+      <div class="progress-item">
+        <div class="progress-top">
+          <strong>核心目标</strong>
+          <span>${progress.coreMastered} / ${progress.coreGoalCount}</span>
+        </div>
+        <div class="bar"><div class="bar-fill blue" style="width:${formatPercent(progress.coreMastered, progress.coreGoalCount)}"></div></div>
+      </div>
+    </div>
+    <p class="muted">总词库一共有 ${progress.totalWords} 个词。当前设置里，${spellLevels} 级会进入默写训练，后面可以升级而不丢进度。</p>
+  `;
+}
+
+function renderFocusWords() {
+  const hardWords = state.overview.hardWords.slice(0, 5);
+
+  focusWordsPanel.innerHTML = `
+    <h2>最近容易错的词</h2>
+    ${
+      hardWords.length === 0
+        ? `<p class="muted">目前还没有反复出错的词，继续保持。</p>`
+        : `<div class="list">
+            ${hardWords
+              .map(
+                (item) => `
+                  <div class="list-item">
+                    <div>
+                      <strong>${item.term}</strong>
+                      <div class="word-meta">${item.meaning || "释义会在学习时自动补全"}</div>
+                    </div>
+                    <div>${item.wrongCount} 次错题</div>
+                  </div>
+                `
+              )
+              .join("")}
+          </div>`
+    }
+  `;
+}
+
+function renderParentDashboard() {
+  const { progress, today, parentMessage, cumulative } = state.overview;
+
+  parentStats.innerHTML = [
+    buildMetricCard("今日学习时长", `${today.minutes} 分钟`, `今天完成 ${today.cards} 次答题`),
+    buildMetricCard("累计答题次数", `${cumulative.totalAttempts} 次`, `累计学过 ${cumulative.studiedWords} 个词`),
+    buildMetricCard("累计掌握词数", `${cumulative.masteredWords} 个`, `总词库 ${progress.totalWords} 个`),
+    buildMetricCard("今日正确率", `${today.correctRate}%`, `包含近似拼写的容错`),
+    buildMetricCard("核心目标进度", `${progress.coreMastered}/${progress.coreGoalCount}`, `还差 ${progress.coreGap} 个`),
+    buildMetricCard(
+      "考试前预计完成",
+      `${progress.projectedPercent}%`,
+      progress.projectedCompletionDate
+        ? `按当前速度，预计完成日 ${progress.projectedCompletionDate}`
+        : "需要再积累几天学习数据"
+    ),
+  ].join("");
+
+  goalPanel.innerHTML = `
+    <h2>进度判断</h2>
+    <div class="progress-list">
+      <div class="progress-item">
+        <div class="progress-top">
+          <strong>时间进度</strong>
+          <span>${progress.timeProgressPercent}%</span>
+        </div>
+        <div class="bar"><div class="bar-fill blue" style="width:${progress.timeProgressPercent}%"></div></div>
+      </div>
+      <div class="progress-item">
+        <div class="progress-top">
+          <strong>学习进度</strong>
+          <span>${progress.learningProgressPercent}%</span>
+        </div>
+        <div class="bar"><div class="bar-fill orange" style="width:${progress.learningProgressPercent}%"></div></div>
+      </div>
+    </div>
+    <div class="progress-list">
+      <div class="progress-item">
+        <div class="progress-top">
+          <strong>核心词推进</strong>
+          <span>${formatPercent(progress.coreMastered, progress.coreGoalCount)}</span>
+        </div>
+        <div class="bar"><div class="bar-fill orange" style="width:${formatPercent(progress.coreMastered, progress.coreGoalCount)}"></div></div>
+      </div>
+      <div class="progress-item">
+        <div class="progress-top">
+          <strong>识别词</strong>
+          <span>${progress.recognizeMastered} / ${progress.recognizeGoalCount}</span>
+        </div>
+        <div class="bar"><div class="bar-fill blue" style="width:${formatPercent(progress.recognizeMastered, progress.recognizeGoalCount)}"></div></div>
+      </div>
+      <div class="progress-item">
+        <div class="progress-top">
+          <strong>重点拼写词</strong>
+          <span>${progress.spellMastered} / ${progress.spellGoalCount}</span>
+        </div>
+        <div class="bar"><div class="bar-fill" style="width:${formatPercent(progress.spellMastered, progress.spellGoalCount)}"></div></div>
+      </div>
+    </div>
+    <p class="muted">${parentMessage}</p>
+    <p class="muted">这里的重点拼写词不是官方单独给出的数量，而是这版系统按优先级挑出来的写作重点词。</p>
+  `;
+
+  mistakePanel.innerHTML = `
+    <h2>需要多刷几次的词</h2>
+    ${
+      state.overview.hardWords.length === 0
+        ? `<p class="muted">目前还没有明显的薄弱词。</p>`
+        : `<div class="list">
+            ${state.overview.hardWords
+              .map(
+                (item) => `
+                  <div class="list-item">
+                    <div>
+                      <strong>${item.term}</strong>
+                      <div class="word-meta">${item.meaning || "释义会在首次学习时自动补全"}</div>
+                    </div>
+                    <div>${item.mastery}</div>
+                  </div>
+                `
+              )
+              .join("")}
+          </div>`
+    }
+  `;
+}
+
+function renderParentInputPanel() {
+  const feedback = state.parentAddFeedback;
+  const feedbackMarkup = feedback
+    ? `
+      <div class="parent-add-feedback ${feedback.type === "error" ? "error" : feedback.type === "success" ? "success" : ""}">
+        ${escapeHtml(feedback.message)}
+      </div>
+    `
+    : "";
+
+  parentInputPanel.innerHTML = `
+    <div class="parent-add-header">
+      <div>
+        <h2>家长补充词</h2>
+        <div class="muted">把真题、阅读或听力里临时遇到的陌生词加进来，系统会优先安排到后面的学习里。</div>
+      </div>
+      <div class="parent-add-note">新补充的词默认按重点词处理，会进入认词、听词和默写流程。</div>
+    </div>
+    <form class="parent-add-form" id="parentAddForm">
+      <div class="parent-add-grid">
+        <input
+          class="parent-add-input"
+          id="parentWordTerm"
+          placeholder="英文单词或词组，例如 yoghurt"
+          autocomplete="off"
+        />
+        <input
+          class="parent-add-input"
+          id="parentWordMeaning"
+          placeholder="中文释义（可选）"
+          autocomplete="off"
+        />
+      </div>
+      <div class="parent-add-actions">
+        <button class="primary-btn" type="submit" ${state.parentAddSubmitting ? "disabled" : ""}>
+          ${state.parentAddSubmitting ? "正在加入..." : "加入学习词库"}
+        </button>
+        <div class="muted">如果词库里已经有这个词，就会直接加入优先学习队列。</div>
+      </div>
+    </form>
+    ${feedbackMarkup}
+  `;
+
+  parentInputPanel.querySelector("#parentAddForm").addEventListener("submit", submitParentWord);
+}
+
+function renderParentWordPanel() {
+  const filter = state.parentWordFilter.trim().toLowerCase();
+  const filteredWords = state.parentWords.filter((item) => {
+    if (!filter) {
+      return true;
+    }
+
+    return `${item.term} ${item.meaning} ${item.theme} ${item.mastery}`
+      .toLowerCase()
+      .includes(filter);
+  });
+
+  wordProgressPanel.innerHTML = `
+    <div class="word-progress-toolbar">
+      <div>
+        <h2>单词掌握明细</h2>
+        <div class="muted">可以查看每个词当前的学习阶段、掌握程度和累计答题次数。</div>
+      </div>
+      <input
+        class="word-filter"
+        id="wordFilterInput"
+        placeholder="搜索单词、中文或主题"
+        value="${escapeHtml(state.parentWordFilter)}"
+      />
+    </div>
+    ${
+      state.parentWordsLoading
+        ? `<p class="muted">正在加载单词明细…</p>`
+        : filteredWords.length === 0
+          ? `<p class="muted">没有匹配到单词。</p>`
+          : `<div class="word-table">
+              <div class="word-row header">
+                <div>单词</div>
+                <div>等级</div>
+                <div>掌握度</div>
+                <div>阶段</div>
+                <div>答题次数</div>
+                <div>下一步</div>
+              </div>
+              ${filteredWords
+                .map(
+                  (item) => `
+                    <div class="word-row">
+                      <div class="word-cell-main">
+                        <strong>${escapeHtml(item.term)}</strong>
+                        <div class="word-meta">${escapeHtml(item.meaning || "中文会在学习时逐步补全")}</div>
+                        ${item.parentAdded ? `<div class="word-flag">家长补充</div>` : ""}
+                      </div>
+                      <div>${escapeHtml(item.priority)}</div>
+                      <div>
+                        <div>${item.masteryPercent}% · ${escapeHtml(item.mastery)}</div>
+                        <div class="tiny-bar"><div class="tiny-bar-fill" style="width:${item.masteryPercent}%"></div></div>
+                      </div>
+                      <div>${escapeHtml(item.stageSummary)}</div>
+                      <div>${item.timesSeen}</div>
+                      <div>${escapeHtml(item.nextAction)}</div>
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>`
+    }
+  `;
+
+  const input = wordProgressPanel.querySelector("#wordFilterInput");
+
+  if (input) {
+    input.addEventListener("input", (event) => {
+      state.parentWordFilter = event.target.value;
+      renderParentWordPanel();
+    });
+  }
+}
+
+function renderStudyPlanMini() {
+  const { plan, exam } = state.overview;
+
+  studyPlanMini.className = "study-plan-mini";
+  studyPlanMini.innerHTML = `
+    <div class="mini-line"><strong>${exam.daysRemaining}</strong> 天后考试</div>
+    <div class="mini-line"><strong>${plan.dueReviewCount}</strong> 个词今天到期</div>
+    <div class="mini-line"><strong>${plan.suggestedNewWords}</strong> 个建议新词</div>
+    <div class="mini-line"><strong>${plan.usedMinutes}</strong> / ${plan.targetMinutes} 分钟</div>
+    <div class="mini-line">${state.encouragement}</div>
+  `;
+}
+
+function priorityLabel(priority) {
+  return priority === "S"
+    ? "S 级拼写词"
+    : priority === "A"
+      ? "A 级重点词"
+      : priority === "B"
+        ? "B 级识别词"
+        : "C 级低频词";
+}
+
+function playCardAudio() {
+  const card = state.currentCard;
+
+  if (!card) {
+    return;
+  }
+
+  if (card.audioUrl) {
+    const audio = new Audio(card.audioUrl);
+    audio.play().catch(() => fallbackSpeak(card.baseTerm));
+    return;
+  }
+
+  fallbackSpeak(card.baseTerm);
+}
+
+function fallbackSpeak(text) {
+  if (!("speechSynthesis" in window)) {
+    return;
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "en-US";
+  utterance.rate = 0.92;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+}
+
+function scheduleAutoPlay() {
+  window.clearTimeout(state.audioAutoPlayTimer);
+  state.audioAutoPlayTimer = window.setTimeout(() => {
+    playCardAudio();
+  }, 120);
+}
+
+function renderCard(card) {
+  state.selectedChoiceId = null;
+  state.feedback = null;
+  state.currentCard = card;
+  state.startedAt = Date.now();
+
+  const promptTitle =
+    card.mode === "listen"
+      ? "听一听这个单词"
+      : card.mode === "spell"
+        ? card.chineseMeaning
+        : card.term;
+
+  const phoneticLine =
+    card.mode === "spell"
+      ? ""
+      : `<div class="phonetic">${card.phonetic || "首次学习时会自动补发音信息"}</div>`;
+
+  const exampleLine =
+    card.example && card.mode !== "spell"
+      ? `<div class="hint-box">例句：${card.example}</div>`
+      : "";
+  const flowNote =
+    card.flowNote
+      ? `<div class="hint-box soft">${card.flowNote}</div>`
+      : "";
+  const modeTip =
+    card.mode === "spell"
+      ? `${card.chineseMeaning}，输入完成后再提交。`
+      : card.mode === "listen"
+        ? "系统会自动播放，也可以手动再听一遍。"
+        : "先看英文，再选出最合适的中文意思。";
+
+  const optionMarkup =
+    card.mode === "spell"
+      ? `
+        <div class="spell-box">
+          <div class="hint-box">提示：${card.hint}</div>
+          <input class="spell-input" id="spellInput" placeholder="输入英文后再提交" autocomplete="off" />
+          <div class="action-row">
+            <button class="secondary-btn" id="audioButton">听发音</button>
+            <button class="submit-btn" id="submitButton">提交答案</button>
+          </div>
+        </div>
+      `
+      : `
+        <div class="option-grid">
+          ${card.options
+            .map(
+              (option) => `
+                <button class="option-btn" data-choice="${option.wordId}">
+                  ${option.label}
+                </button>
+              `
+            )
+            .join("")}
+        </div>
+        <div class="action-row">
+          <button class="secondary-btn" id="audioButton">${card.mode === "listen" ? "再听一遍" : "听发音"}</button>
+          <button class="submit-btn" id="submitButton">提交答案</button>
+        </div>
+      `;
+
+  studyPanel.innerHTML = `
+    <div class="study-card">
+      <div class="card-top">
+        <div>
+          <div class="badge-row">
+            <span class="badge priority-${card.priority.toLowerCase()}">${priorityLabel(card.priority)}</span>
+            <span class="badge priority-b">${card.theme}</span>
+            <span class="badge priority-c">${formatPartOfSpeechLabel(card.partOfSpeech)}</span>
+            <span class="badge priority-c">${card.prompt}</span>
+          </div>
+          <div class="prompt-title">${promptTitle}</div>
+          ${phoneticLine}
+        </div>
+        <div class="mode-tip">
+          ${modeTip}
+        </div>
+      </div>
+      ${flowNote}
+      ${exampleLine}
+      ${optionMarkup}
+      <div id="feedbackArea"></div>
+    </div>
+  `;
+
+  const audioButton = studyPanel.querySelector("#audioButton");
+  audioButton.addEventListener("click", playCardAudio);
+
+  scheduleAutoPlay();
+
+  if (card.mode === "spell") {
+    studyPanel.querySelector("#spellInput").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        submitAnswer();
+      }
+    });
+  } else {
+    studyPanel.querySelectorAll(".option-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.selectedChoiceId = Number(button.dataset.choice);
+        studyPanel.querySelectorAll(".option-btn").forEach((item) => {
+          item.classList.toggle("selected", item === button);
+        });
+      });
+    });
+  }
+
+  studyPanel.querySelector("#submitButton").addEventListener("click", submitAnswer);
+}
+
+function renderStudyDone(message) {
+  studyPanel.innerHTML = `
+    <div class="empty-state">
+      <h2>今天完成啦</h2>
+      <p>${message}</p>
+      <div class="action-row">
+        <button class="primary-btn" id="doneHomeButton">回到今日任务</button>
+      </div>
+    </div>
+  `;
+
+  studyPanel.querySelector("#doneHomeButton").addEventListener("click", () => {
+    switchView("home");
+  });
+}
+
+function showStudyLoading() {
+  studyPanel.innerHTML = `
+    <div class="empty-state">
+      <h2>正在安排下一题</h2>
+      <p>系统会优先推送高优先级词和到期复习词。</p>
+    </div>
+  `;
+}
+
+async function getNextCardPayload() {
+  if (state.prefetchedNext) {
+    const payload = state.prefetchedNext;
+    state.prefetchedNext = null;
+    return payload;
+  }
+
+  if (state.prefetchedNextPromise) {
+    const payload = await state.prefetchedNextPromise;
+    state.prefetchedNext = null;
+    return payload;
+  }
+
+  return requestJson("/api/study/next");
+}
+
+function prefetchNextCard() {
+  if (state.prefetchedNext || state.prefetchedNextPromise) {
+    return;
+  }
+
+  state.prefetchedNextPromise = requestJson("/api/study/next")
+    .then((payload) => {
+      state.prefetchedNext = payload;
+      return payload;
+    })
+    .finally(() => {
+      state.prefetchedNextPromise = null;
+    });
+}
+
+async function submitAnswer() {
+  if (!state.currentCard) {
+    return;
+  }
+
+  if (state.currentCard.mode !== "spell" && !state.selectedChoiceId) {
+    return;
+  }
+
+  const payload = {
+    wordId: state.currentCard.wordId,
+    mode: state.currentCard.mode,
+    elapsedMs: Date.now() - state.startedAt,
+  };
+
+  if (state.currentCard.mode === "spell") {
+    payload.response = studyPanel.querySelector("#spellInput").value.trim();
+  } else {
+    payload.choiceWordId = state.selectedChoiceId;
+  }
+
+  const result = await requestJson("/api/study/answer", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  state.overview = result.overview;
+  state.parentWordsNeedRefresh = true;
+  renderOverview();
+  prefetchNextCard();
+
+  const feedbackArea = studyPanel.querySelector("#feedbackArea");
+  const cssClass =
+    result.evaluation.result === "wrong"
+      ? "feedback wrong"
+      : result.evaluation.result === "almost"
+        ? "feedback almost"
+        : "feedback";
+
+  feedbackArea.innerHTML = `
+    <div class="${cssClass}">
+      <strong>${
+        result.evaluation.result === "correct"
+          ? "答对了"
+          : result.evaluation.result === "almost"
+            ? "很接近"
+            : "这题先记下来"
+      }</strong>
+      <p>${result.evaluation.note}</p>
+      <p>当前状态：${result.masteryLabel}</p>
+      <button class="primary-btn" id="nextCardButton">下一个</button>
+    </div>
+  `;
+
+  const nextButton = feedbackArea.querySelector("#nextCardButton");
+  nextButton.addEventListener("click", async () => {
+    nextButton.disabled = true;
+    nextButton.textContent = "正在准备...";
+    await loadNextCard();
+  });
+}
+
+async function loadNextCard({ showLoading = false } = {}) {
+  if (showLoading) {
+    showStudyLoading();
+  }
+
+  const payload = await getNextCardPayload();
+
+  if (payload.status === "done") {
+    renderStudyDone(payload.message);
+    return;
+  }
+
+  renderCard(payload.card);
+}
+
+async function ensureParentWords(force = false) {
+  if (!force && !state.parentWordsNeedRefresh && state.parentWords.length > 0) {
+    renderParentWordPanel();
+    return;
+  }
+
+  state.parentWordsLoading = true;
+  renderParentWordPanel();
+
+  try {
+    const payload = await requestJson("/api/parent/words");
+    state.parentWords = payload.words;
+    state.parentWordsNeedRefresh = false;
+  } finally {
+    state.parentWordsLoading = false;
+    renderParentWordPanel();
+  }
+}
+
+async function submitParentWord(event) {
+  event.preventDefault();
+
+  const termInput = parentInputPanel.querySelector("#parentWordTerm");
+  const meaningInput = parentInputPanel.querySelector("#parentWordMeaning");
+  const term = termInput.value.trim();
+  const meaning = meaningInput.value.trim();
+
+  if (!term) {
+    state.parentAddFeedback = {
+      type: "error",
+      message: "先输入要补充的英文单词或词组。",
+    };
+    renderParentInputPanel();
+    return;
+  }
+
+  state.parentAddSubmitting = true;
+  state.parentAddFeedback = {
+    type: "info",
+    message: "正在加入词库，并补齐本地释义和发音缓存…",
+  };
+  renderParentInputPanel();
+
+  try {
+    const payload = await requestJson("/api/parent/words", {
+      method: "POST",
+      body: JSON.stringify({
+        term,
+        meaning,
+      }),
+    });
+
+    state.overview = payload.overview;
+    state.parentWordsNeedRefresh = true;
+    state.parentAddFeedback = {
+      type: "success",
+      message:
+        payload.action === "created"
+          ? `已加入 ${payload.word.term}，后面会优先安排学习。`
+          : `词库里已有 ${payload.word.term}，已经加入优先学习队列。`,
+    };
+
+    renderOverview();
+    await ensureParentWords(true);
+  } catch (error) {
+    state.parentAddFeedback = {
+      type: "error",
+      message: "加入失败了，请稍后再试。",
+    };
+    renderParentInputPanel();
+  } finally {
+    state.parentAddSubmitting = false;
+    renderParentInputPanel();
+  }
+}
+
+function renderOverview() {
+  if (!state.overview) {
+    return;
+  }
+
+  renderHero();
+  renderProgress();
+  renderFocusWords();
+  renderParentDashboard();
+  renderParentInputPanel();
+  renderStudyPlanMini();
+
+  if (views.parent.classList.contains("active")) {
+    renderParentWordPanel();
+  }
+}
+
+async function init() {
+  state.encouragement =
+    ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
+
+  if (state.isAdmin) {
+    document.title = "KET 家长看板";
+    document.querySelector(".nav-tabs").style.display = "none";
+    switchView("parent");
+    await ensureParentWords(true);
+  }
+
+  showStudyLoading();
+
+  state.overview = await requestJson("/api/overview");
+  renderOverview();
+
+  if (state.isAdmin) {
+    switchView("parent");
+  }
+}
+
+init().catch((error) => {
+  console.error(error);
+  studyPanel.innerHTML = `
+    <div class="empty-state">
+      <h2>加载失败</h2>
+      <p>请确认本地服务已经启动，然后刷新页面重试。</p>
+    </div>
+  `;
+});

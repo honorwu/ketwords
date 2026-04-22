@@ -1,0 +1,25 @@
+{
+  "name": "ketwords",
+  "version": "1.0.0",
+  "description": "Local A2 Key for Schools vocabulary trainer for a child learner.",
+  "main": "server.js",
+  "scripts": {
+    "build:wordlist": "node scripts/build-wordlist.js",
+    "cache:offline": "node scripts/cache-offline-resources.js",
+    "dev": "node --watch server.js",
+    "start": "node server.js"
+  },
+  "keywords": [
+    "ket",
+    "a2-key",
+    "vocabulary",
+    "sqlite",
+    "local-app"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "pdf-parse": "^2.4.5"
+  }
+}

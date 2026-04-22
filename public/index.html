@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KET 单词冲刺</title>
+    <link rel="stylesheet" href="/fonts.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-glow"></div>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-chip">A2</div>
+          <div>
+            <h1>KET 单词冲刺</h1>
+            <p>孩子学得轻松，家长看得清楚</p>
+          </div>
+        </div>
+        <nav class="nav-tabs">
+          <button class="nav-tab active" data-view="home">今日任务</button>
+          <button class="nav-tab" data-view="study">开始学习</button>
+        </nav>
+      </header>
+
+      <main class="layout">
+        <section class="view active" id="homeView">
+          <div class="hero" id="heroCard"></div>
+          <div class="grid two-col">
+            <section class="panel" id="progressPanel"></section>
+            <section class="panel" id="focusWordsPanel"></section>
+          </div>
+        </section>
+
+        <section class="view" id="studyView">
+          <div class="study-layout">
+            <aside class="study-side panel">
+              <h2>今天的节奏</h2>
+              <div id="studyPlanMini"></div>
+              <button class="danger-btn full-width" id="endStudyButton">今天先到这里</button>
+              <p class="muted">如果今天状态不好，可以随时结束，学习进度会自动保存。</p>
+            </aside>
+
+            <section class="panel study-main" id="studyPanel">
+              <div class="empty-state">
+                <h2>准备开始</h2>
+                <p>先从高优先级词开始，系统会自动安排认词、听词和拼写。</p>
+                <button class="primary-btn" id="startStudyButton">开始今天的学习</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="parentView">
+          <div class="grid stat-grid" id="parentStats"></div>
+          <section class="panel" id="parentInputPanel"></section>
+          <div class="grid two-col">
+            <section class="panel" id="goalPanel"></section>
+            <section class="panel" id="mistakePanel"></section>
+          </div>
+          <section class="panel" id="wordProgressPanel"></section>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
