@@ -4,8 +4,7 @@
 # dependencies
 node_modules/
 
-# runtime database and local config
-data/ketwords.sqlite
+# runtime database sidecars and local config
 data/ketwords.sqlite-shm
 data/ketwords.sqlite-wal
 data/study-config.json
@@ -13,8 +12,3 @@ data/study-config.json
 # local source materials and temp extracts
 data/a2-key-vocabulary-list.pdf
 tmp/
-
-# generated offline cache assets
-public/audio/
-public/assets/fonts/
-public/fonts.css
