@@ -171,7 +171,7 @@ async function buildCard() {
       chineseMeaning: candidate.chineseMeaning || "",
       phonetic: candidate.phonetic || "",
       audioUrl: candidate.audioUrl || "",
-      example: candidate.examples?.[0] || "",
+      example: next.mode === "recognize" ? candidate.examples?.[0] || "" : "",
       options,
       hint: buildSpellingHint(candidate.baseTerm),
       flowNote:

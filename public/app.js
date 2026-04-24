@@ -13,6 +13,8 @@ const state = {
   parentWordFilter: "",
   parentAddSubmitting: false,
   parentAddFeedback: null,
+  answerSubmitting: false,
+  cardLoading: false,
   audioAutoPlayTimer: null,
   encouragement: "",
 };
@@ -70,6 +72,11 @@ function switchView(name) {
 
 navTabs.forEach((button) => {
   button.addEventListener("click", () => {
+    if (button.dataset.view === "study") {
+      beginStudySession();
+      return;
+    }
+
     switchView(button.dataset.view);
   });
 });
@@ -80,9 +87,16 @@ function endStudySession() {
 
 endStudyButton.addEventListener("click", endStudySession);
 startStudyButton.addEventListener("click", () => {
-  switchView("study");
-  loadNextCard({ showLoading: true });
+  beginStudySession();
 });
+
+function beginStudySession() {
+  switchView("study");
+
+  if (!state.currentCard && !state.cardLoading) {
+    loadNextCard({ showLoading: true });
+  }
+}
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {
@@ -224,8 +238,7 @@ function renderHero() {
   `;
 
   heroCard.querySelector("#heroStartButton").addEventListener("click", () => {
-    switchView("study");
-    loadNextCard({ showLoading: true });
+    beginStudySession();
   });
 }
 
@@ -552,6 +565,7 @@ function renderCard(card) {
   state.feedback = null;
   state.currentCard = card;
   state.startedAt = Date.now();
+  state.answerSubmitting = false;
 
   const promptTitle =
     card.mode === "listen"
@@ -566,7 +580,7 @@ function renderCard(card) {
       : `<div class="phonetic">${card.phonetic || "首次学习时会自动补发音信息"}</div>`;
 
   const exampleLine =
-    card.example && card.mode !== "spell"
+    card.example && card.mode === "recognize"
       ? `<div class="hint-box">例句：${card.example}</div>`
       : "";
   const flowNote =
@@ -606,6 +620,7 @@ function renderCard(card) {
         </div>
         <div class="action-row">
           <button class="secondary-btn" id="audioButton">${card.mode === "listen" ? "再听一遍" : "听发音"}</button>
+          <button class="secondary-btn dont-know-btn" id="dontKnowButton">不会</button>
           <button class="submit-btn" id="submitButton">提交答案</button>
         </div>
       `;
@@ -656,7 +671,13 @@ function renderCard(card) {
     });
   }
 
-  studyPanel.querySelector("#submitButton").addEventListener("click", submitAnswer);
+  const dontKnowButton = studyPanel.querySelector("#dontKnowButton");
+
+  if (dontKnowButton) {
+    dontKnowButton.addEventListener("click", () => submitAnswer({ gaveUp: true }));
+  }
+
+  studyPanel.querySelector("#submitButton").addEventListener("click", () => submitAnswer());
 }
 
 function renderStudyDone(message) {
@@ -715,14 +736,25 @@ function prefetchNextCard() {
     });
 }
 
-async function submitAnswer() {
-  if (!state.currentCard) {
+function setAnswerControlsDisabled(disabled) {
+  studyPanel
+    .querySelectorAll("#submitButton, #dontKnowButton, #audioButton, .option-btn, #spellInput")
+    .forEach((element) => {
+      element.disabled = disabled;
+    });
+}
+
+async function submitAnswer({ gaveUp = false } = {}) {
+  if (!state.currentCard || state.answerSubmitting) {
     return;
   }
 
-  if (state.currentCard.mode !== "spell" && !state.selectedChoiceId) {
+  if (state.currentCard.mode !== "spell" && !state.selectedChoiceId && !gaveUp) {
     return;
   }
+
+  state.answerSubmitting = true;
+  setAnswerControlsDisabled(true);
 
   const payload = {
     wordId: state.currentCard.wordId,
@@ -732,14 +764,30 @@ async function submitAnswer() {
 
   if (state.currentCard.mode === "spell") {
     payload.response = studyPanel.querySelector("#spellInput").value.trim();
+  } else if (gaveUp) {
+    payload.gaveUp = true;
   } else {
     payload.choiceWordId = state.selectedChoiceId;
   }
 
-  const result = await requestJson("/api/study/answer", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  let result;
+
+  try {
+    result = await requestJson("/api/study/answer", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    state.answerSubmitting = false;
+    setAnswerControlsDisabled(false);
+    studyPanel.querySelector("#feedbackArea").innerHTML = `
+      <div class="feedback wrong">
+        <strong>提交失败</strong>
+        <p>网络或服务暂时没有响应，请再试一次。</p>
+      </div>
+    `;
+    return;
+  }
 
   state.overview = result.overview;
   state.parentWordsNeedRefresh = true;
@@ -778,18 +826,39 @@ async function submitAnswer() {
 }
 
 async function loadNextCard({ showLoading = false } = {}) {
+  state.cardLoading = true;
+
   if (showLoading) {
     showStudyLoading();
   }
 
-  const payload = await getNextCardPayload();
+  let payload;
 
-  if (payload.status === "done") {
-    renderStudyDone(payload.message);
+  try {
+    payload = await getNextCardPayload();
+  } catch (error) {
+    studyPanel.innerHTML = `
+      <div class="empty-state">
+        <h2>下一题加载失败</h2>
+        <p>请刷新页面，或稍后再试一次。</p>
+        <button class="primary-btn" id="retryStudyButton">重新加载</button>
+      </div>
+    `;
+    studyPanel.querySelector("#retryStudyButton").addEventListener("click", () => {
+      loadNextCard({ showLoading: true });
+    });
+    state.cardLoading = false;
     return;
   }
 
-  renderCard(payload.card);
+  if (payload.status === "done") {
+    state.currentCard = null;
+    renderStudyDone(payload.message);
+  } else {
+    renderCard(payload.card);
+  }
+
+  state.cardLoading = false;
 }
 
 async function ensureParentWords(force = false) {
