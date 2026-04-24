@@ -8,6 +8,8 @@ node_modules/
 data/ketwords.sqlite-shm
 data/ketwords.sqlite-wal
 data/study-config.json
+data/auth-config.json
+data/backups/
 
 # local source materials and temp extracts
 data/a2-key-vocabulary-list.pdf

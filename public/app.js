@@ -15,6 +15,8 @@ const state = {
   parentAddFeedback: null,
   answerSubmitting: false,
   cardLoading: false,
+  auth: null,
+  appLoaded: false,
   audioAutoPlayTimer: null,
   encouragement: "",
 };
@@ -31,6 +33,7 @@ const ENCOURAGEMENTS = [
 ];
 
 const navTabs = Array.from(document.querySelectorAll(".nav-tab"));
+const appShell = document.querySelector(".app-shell");
 const views = {
   home: document.querySelector("#homeView"),
   study: document.querySelector("#studyView"),
@@ -99,18 +102,87 @@ function beginStudySession() {
 }
 
 async function requestJson(url, options = {}) {
+  const { skipAuthPrompt = false, ...fetchOptions } = options;
   const response = await fetch(url, {
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
+      ...(fetchOptions.headers || {}),
     },
-    ...options,
+    ...fetchOptions,
   });
 
   if (!response.ok) {
+    if (response.status === 401 && !skipAuthPrompt) {
+      state.auth = null;
+      state.appLoaded = false;
+      renderAuthScreen("登录已过期，请重新输入密码。");
+    }
+
     throw new Error(`HTTP ${response.status}`);
   }
 
   return response.json();
+}
+
+function renderAuthScreen(message = "") {
+  appShell.style.display = "none";
+  document.querySelector("#authScreen")?.remove();
+
+  const role = state.isAdmin ? "admin" : "study";
+  const screen = document.createElement("div");
+  screen.className = "auth-screen";
+  screen.id = "authScreen";
+  screen.innerHTML = `
+    <form class="auth-card" id="authForm">
+      <div class="brand-chip">A2</div>
+      <h1>${state.isAdmin ? "家长端登录" : "学习端登录"}</h1>
+      <p class="muted">${state.isAdmin ? "请输入家长管理密码。" : "请输入学习端密码。"}</p>
+      <input
+        class="auth-input"
+        id="authPassword"
+        type="password"
+        placeholder="密码"
+        autocomplete="current-password"
+        autofocus
+      />
+      <button class="primary-btn full-width" type="submit" id="authSubmit">登录</button>
+      <div class="auth-error" id="authError">${escapeHtml(message)}</div>
+    </form>
+  `;
+
+  document.body.appendChild(screen);
+  screen.querySelector("#authPassword").focus();
+  screen.querySelector("#authForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const passwordInput = screen.querySelector("#authPassword");
+    const submitButton = screen.querySelector("#authSubmit");
+    const errorBox = screen.querySelector("#authError");
+
+    submitButton.disabled = true;
+    errorBox.textContent = "";
+
+    try {
+      const auth = await requestJson("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          role,
+          password: passwordInput.value,
+        }),
+        skipAuthPrompt: true,
+      });
+
+      state.auth = auth;
+      screen.remove();
+      appShell.style.display = "";
+      await loadAuthenticatedApp();
+    } catch (error) {
+      errorBox.textContent = "密码不正确，请再试一次。";
+      passwordInput.select();
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
 }
 
 function formatPercent(current, total) {
@@ -954,9 +1026,12 @@ function renderOverview() {
   }
 }
 
-async function init() {
-  state.encouragement =
-    ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
+async function loadAuthenticatedApp() {
+  if (state.appLoaded) {
+    state.overview = await requestJson("/api/overview");
+    renderOverview();
+    return;
+  }
 
   if (state.isAdmin) {
     document.title = "KET 家长看板";
@@ -973,6 +1048,25 @@ async function init() {
   if (state.isAdmin) {
     switchView("parent");
   }
+
+  state.appLoaded = true;
+}
+
+async function init() {
+  state.encouragement =
+    ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
+
+  const auth = await requestJson("/api/auth/me", {
+    skipAuthPrompt: true,
+  });
+
+  if (!auth.authenticated || (state.isAdmin && auth.role !== "admin")) {
+    renderAuthScreen();
+    return;
+  }
+
+  state.auth = auth;
+  await loadAuthenticatedApp();
 }
 
 init().catch((error) => {

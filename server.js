@@ -1,12 +1,20 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
+const crypto = require("node:crypto");
 const { ensureWordlistJson } = require("./lib/wordlist");
 const { createStore } = require("./lib/store");
 const { ensureWordOfflineData } = require("./lib/offline-cache");
 
 const PORT = Number(process.env.PORT || 3210);
 const PUBLIC_DIR = path.join(__dirname, "public");
+const DATA_DIR = path.join(__dirname, "data");
+const AUTH_CONFIG_PATH = path.join(DATA_DIR, "auth-config.json");
+const BACKUP_DIR = process.env.KET_BACKUP_DIR || path.join(DATA_DIR, "backups");
+const SESSION_COOKIE = "ket_session";
+const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+const BACKUP_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+const BACKUP_RETENTION_DAYS = Number(process.env.KET_BACKUP_RETENTION_DAYS || 30);
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -22,11 +30,13 @@ const MIME_TYPES = {
 };
 
 let store;
+const authConfig = loadAuthConfig();
 
-function sendJson(response, statusCode, payload) {
+function sendJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    ...headers,
   });
   response.end(JSON.stringify(payload));
 }
@@ -60,6 +70,245 @@ function readRequestBody(request) {
 
     request.on("error", reject);
   });
+}
+
+function randomSecret(size = 18) {
+  return crypto.randomBytes(size).toString("base64url");
+}
+
+function hashPassword(password) {
+  const salt = randomSecret(16);
+  const hash = crypto
+    .scryptSync(String(password), salt, 32, {
+      N: 16384,
+      r: 8,
+      p: 1,
+    })
+    .toString("base64url");
+
+  return `scrypt$16384$8$1$${salt}$${hash}`;
+}
+
+function verifyPasswordHash(password, encodedHash) {
+  const [algorithm, nValue, rValue, pValue, salt, storedHash] = String(encodedHash || "").split("$");
+
+  if (algorithm !== "scrypt" || !salt || !storedHash) {
+    return false;
+  }
+
+  let candidateHash;
+
+  try {
+    candidateHash = crypto
+      .scryptSync(String(password), salt, 32, {
+        N: Number(nValue),
+        r: Number(rValue),
+        p: Number(pValue),
+      })
+      .toString("base64url");
+  } catch (error) {
+    return false;
+  }
+
+  return safeEqual(candidateHash, storedHash);
+}
+
+function loadAuthConfig() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+
+  let fileConfig = {};
+
+  if (fs.existsSync(AUTH_CONFIG_PATH)) {
+    try {
+      fileConfig = JSON.parse(fs.readFileSync(AUTH_CONFIG_PATH, "utf8"));
+    } catch (error) {
+      console.warn("认证配置读取失败，将重新生成缺失项。", error);
+    }
+  }
+
+  const studyPassword =
+    process.env.KET_STUDY_PASSWORD || process.env.STUDY_PASSWORD || fileConfig.studyPassword;
+  const adminPassword =
+    process.env.KET_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || fileConfig.adminPassword;
+  const nextConfig = {
+    studyPasswordHash: process.env.KET_STUDY_PASSWORD_HASH || fileConfig.studyPasswordHash,
+    adminPasswordHash: process.env.KET_ADMIN_PASSWORD_HASH || fileConfig.adminPasswordHash,
+    sessionSecret:
+      process.env.KET_SESSION_SECRET || process.env.SESSION_SECRET || fileConfig.sessionSecret,
+  };
+
+  let generated = false;
+
+  if (studyPassword) {
+    nextConfig.studyPasswordHash = hashPassword(studyPassword);
+    generated = true;
+  }
+
+  if (adminPassword) {
+    nextConfig.adminPasswordHash = hashPassword(adminPassword);
+    generated = true;
+  }
+
+  if (!nextConfig.studyPasswordHash) {
+    nextConfig.studyPasswordHash = hashPassword(randomSecret());
+    generated = true;
+  }
+
+  if (!nextConfig.adminPasswordHash) {
+    nextConfig.adminPasswordHash = hashPassword(randomSecret());
+    generated = true;
+  }
+
+  if (!nextConfig.sessionSecret) {
+    nextConfig.sessionSecret = randomSecret(32);
+    generated = true;
+  }
+
+  if (generated || !fs.existsSync(AUTH_CONFIG_PATH) || fileConfig.studyPassword || fileConfig.adminPassword) {
+    fs.writeFileSync(AUTH_CONFIG_PATH, JSON.stringify(nextConfig, null, 2), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    console.log(`已生成认证配置：${AUTH_CONFIG_PATH}`);
+  }
+
+  return nextConfig;
+}
+
+function parseCookies(cookieHeader = "") {
+  return Object.fromEntries(
+    cookieHeader
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separatorIndex = part.indexOf("=");
+        const key = separatorIndex >= 0 ? part.slice(0, separatorIndex) : part;
+        const value = separatorIndex >= 0 ? part.slice(separatorIndex + 1) : "";
+        return [key, decodeURIComponent(value)];
+      })
+  );
+}
+
+function signSessionBody(body) {
+  return crypto
+    .createHmac("sha256", authConfig.sessionSecret)
+    .update(body)
+    .digest("base64url");
+}
+
+function safeEqual(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""));
+  const rightBuffer = Buffer.from(String(right || ""));
+
+  return (
+    leftBuffer.length === rightBuffer.length &&
+    crypto.timingSafeEqual(leftBuffer, rightBuffer)
+  );
+}
+
+function createSessionToken(role) {
+  const body = Buffer.from(
+    JSON.stringify({
+      role,
+      exp: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
+    })
+  ).toString("base64url");
+
+  return `${body}.${signSessionBody(body)}`;
+}
+
+function readSession(request) {
+  const token = parseCookies(request.headers.cookie || "")[SESSION_COOKIE];
+
+  if (!token) {
+    return null;
+  }
+
+  const [body, signature] = token.split(".");
+
+  if (!body || !signature || !safeEqual(signature, signSessionBody(body))) {
+    return null;
+  }
+
+  try {
+    const session = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+
+    if (!session.exp || session.exp < Date.now()) {
+      return null;
+    }
+
+    if (session.role !== "study" && session.role !== "admin") {
+      return null;
+    }
+
+    return session;
+  } catch (error) {
+    return null;
+  }
+}
+
+function buildSessionCookie(request, token) {
+  const isSecure =
+    process.env.KET_COOKIE_SECURE === "1" ||
+    request.headers["x-forwarded-proto"] === "https";
+
+  return [
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${SESSION_MAX_AGE_SECONDS}`,
+    isSecure ? "Secure" : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+}
+
+function buildClearCookie() {
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+function canAccess(session, role) {
+  if (!session) {
+    return false;
+  }
+
+  return role === "study"
+    ? session.role === "study" || session.role === "admin"
+    : session.role === "admin";
+}
+
+function requireAuth(request, response, role) {
+  const session = readSession(request);
+
+  if (!session) {
+    sendError(response, 401, "请先登录。");
+    return null;
+  }
+
+  if (!canAccess(session, role)) {
+    sendError(response, 403, "没有权限访问这里。");
+    return null;
+  }
+
+  return session;
+}
+
+function verifyPassword(role, password) {
+  if (role === "admin") {
+    return verifyPasswordHash(password, authConfig.adminPasswordHash) ? "admin" : null;
+  }
+
+  if (verifyPasswordHash(password, authConfig.studyPasswordHash)) {
+    return "study";
+  }
+
+  if (verifyPasswordHash(password, authConfig.adminPasswordHash)) {
+    return "admin";
+  }
+
+  return null;
 }
 
 async function ensureWordMeaning(state) {
@@ -232,18 +481,138 @@ function serveStatic(request, response, pathname) {
   fs.createReadStream(filePath).pipe(response);
 }
 
+function dateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function runDatabaseBackup(reason = "daily") {
+  if (process.env.KET_AUTO_BACKUP === "0") {
+    return;
+  }
+
+  const backupPath = path.join(BACKUP_DIR, `ketwords-${dateKey()}.sqlite`);
+
+  if (fs.existsSync(backupPath)) {
+    return;
+  }
+
+  const savedPath = store.backupDatabase(backupPath);
+  cleanupOldBackups();
+  console.log(`学习数据已备份（${reason}）：${savedPath}`);
+}
+
+function cleanupOldBackups() {
+  if (!Number.isFinite(BACKUP_RETENTION_DAYS) || BACKUP_RETENTION_DAYS <= 0) {
+    return;
+  }
+
+  if (!fs.existsSync(BACKUP_DIR)) {
+    return;
+  }
+
+  const cutoff = Date.now() - BACKUP_RETENTION_DAYS * 86400000;
+
+  for (const file of fs.readdirSync(BACKUP_DIR)) {
+    if (!/^ketwords-\d{4}-\d{2}-\d{2}\.sqlite/.test(file)) {
+      continue;
+    }
+
+    const fullPath = path.join(BACKUP_DIR, file);
+    const stats = fs.statSync(fullPath);
+
+    if (stats.mtimeMs < cutoff) {
+      fs.rmSync(fullPath, { force: true });
+    }
+  }
+}
+
+function startBackupScheduler() {
+  runDatabaseBackup("startup");
+  setInterval(() => runDatabaseBackup("daily"), BACKUP_CHECK_INTERVAL_MS).unref();
+}
+
 async function handleApi(request, response, pathname) {
+  if (request.method === "GET" && pathname === "/api/auth/me") {
+    const session = readSession(request);
+    sendJson(response, 200, {
+      authenticated: Boolean(session),
+      role: session?.role || null,
+    });
+    return;
+  }
+
+  if (request.method === "POST" && pathname === "/api/auth/login") {
+    const body = await readRequestBody(request);
+    const role = body.role === "admin" ? "admin" : "study";
+    const verifiedRole = verifyPassword(role, body.password || "");
+
+    if (!verifiedRole || !canAccess({ role: verifiedRole }, role)) {
+      sendError(response, 401, "密码不正确。");
+      return;
+    }
+
+    const token = createSessionToken(verifiedRole);
+    sendJson(
+      response,
+      200,
+      {
+        authenticated: true,
+        role: verifiedRole,
+      },
+      {
+        "Set-Cookie": buildSessionCookie(request, token),
+      }
+    );
+    return;
+  }
+
+  if (request.method === "POST" && pathname === "/api/auth/logout") {
+    sendJson(
+      response,
+      200,
+      {
+        ok: true,
+      },
+      {
+        "Set-Cookie": buildClearCookie(),
+      }
+    );
+    return;
+  }
+
+  if (request.method === "GET" && pathname === "/api/health") {
+    sendJson(response, 200, {
+      ok: true,
+    });
+    return;
+  }
+
   if (request.method === "GET" && pathname === "/api/overview") {
+    if (!requireAuth(request, response, "study")) {
+      return;
+    }
+
     sendJson(response, 200, store.getOverview());
     return;
   }
 
   if (request.method === "GET" && pathname === "/api/study/next") {
+    if (!requireAuth(request, response, "study")) {
+      return;
+    }
+
     sendJson(response, 200, await buildCard());
     return;
   }
 
   if (request.method === "GET" && pathname === "/api/parent/words") {
+    if (!requireAuth(request, response, "admin")) {
+      return;
+    }
+
     sendJson(response, 200, {
       words: store.getParentWords(),
     });
@@ -251,6 +620,10 @@ async function handleApi(request, response, pathname) {
   }
 
   if (request.method === "POST" && pathname === "/api/parent/words") {
+    if (!requireAuth(request, response, "admin")) {
+      return;
+    }
+
     const body = await readRequestBody(request);
 
     if (!body.term) {
@@ -281,6 +654,10 @@ async function handleApi(request, response, pathname) {
   }
 
   if (request.method === "POST" && pathname === "/api/study/answer") {
+    if (!requireAuth(request, response, "study")) {
+      return;
+    }
+
     const body = await readRequestBody(request);
 
     if (!body.wordId || !body.mode) {
@@ -296,13 +673,6 @@ async function handleApi(request, response, pathname) {
     return;
   }
 
-  if (request.method === "GET" && pathname === "/api/health") {
-    sendJson(response, 200, {
-      ok: true,
-    });
-    return;
-  }
-
   sendError(response, 404, "没有找到这个接口。");
 }
 
@@ -310,6 +680,7 @@ async function bootstrap() {
   const words = await ensureWordlistJson();
   store = createStore();
   store.syncWords(words);
+  startBackupScheduler();
 
   const server = http.createServer(async (request, response) => {
     try {

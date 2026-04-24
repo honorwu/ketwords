@@ -16,13 +16,13 @@
 - 服务端是原生 Node.js HTTP 服务，没有使用 Express
 - 默认端口是 `3210`，可通过 `PORT` 环境变量覆盖
 - 前端静态资源由同一个 Node 服务直接提供
-- `/admin` 没有登录鉴权
+- 学习端和 `/admin` 都有简单密码登录
+- 服务启动后会每天自动备份 `data/ketwords.sqlite`
 - 当前仓库已经提交了一份离线基线资源，可直接用于首发部署
 
 部署建议：
 
-- 只在家庭内网、校园内网或受控网络中直接使用
-- 如果必须暴露到公网，请在 Nginx / Caddy / Traefik 层加 Basic Auth、IP 白名单或其他认证
+- 公网部署时仍建议使用 HTTPS，并在 Nginx / Caddy / Traefik 层保留限流或 IP 白名单等额外保护
 
 ## 2. 目录与持久化文件
 
@@ -34,6 +34,10 @@
   已提交的主数据库基线。部署后它会继续写入学习记录和词条元数据
 - `data/study-config.json`
   本地学习配置
+- `data/auth-config.json`
+  登录密码哈希和 session 签名密钥；如果没有用环境变量指定，服务首次启动会自动生成
+- `data/backups/`
+  自动每日备份目录
 - `public/audio/`
   已提交的本地音频缓存
 - `public/assets/fonts/`
@@ -113,6 +117,9 @@ Type=simple
 User=www-data
 WorkingDirectory=/srv/ketwords
 Environment=PORT=3210
+Environment=KET_STUDY_PASSWORD=请替换为孩子端密码
+Environment=KET_ADMIN_PASSWORD=请替换为家长端密码
+Environment=KET_SESSION_SECRET=请替换为足够长的随机字符串
 ExecStart=/usr/bin/env npm start
 Restart=always
 RestartSec=3
@@ -246,12 +253,15 @@ sudo systemctl status ketwords
 
 ## 7. 备份与恢复
 
+服务启动后会自动执行一次当天备份，之后每小时检查一次：如果当天还没有备份，就复制一份到 `data/backups/ketwords-YYYY-MM-DD.sqlite`。默认保留最近 30 天，可通过 `KET_BACKUP_RETENTION_DAYS` 调整；如果要关闭自动备份，可设置 `KET_AUTO_BACKUP=0`。
+
 ### 7.1 最小备份集
 
 至少备份：
 
 - `data/ketwords.sqlite`
 - `data/study-config.json`
+- `data/auth-config.json`（如果没有用环境变量配置密码）
 
 ### 7.2 完整备份集
 
@@ -282,9 +292,9 @@ Node 版本太低。升级到支持 `node:sqlite` 的版本，建议直接使用
 npm run cache:offline
 ```
 
-### `/admin` 可以被任何人访问
+### 忘记登录密码
 
-当前代码没有登录鉴权。不要直接裸露到公网；请在反向代理层加认证或至少做 IP 限制。
+如果使用环境变量配置，请查看 systemd 或部署平台里的环境变量。如果使用本地配置，`data/auth-config.json` 里只保存哈希，不能反查原密码，需要重新生成密码哈希或改用环境变量后重启服务。
 
 ### 重启后学习进度丢了
 

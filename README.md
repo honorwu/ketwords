@@ -16,6 +16,8 @@
 - 家长看板展示累计进度、错词、预计完成度和词条明细
 - 支持家长手动补充陌生词，并优先加入学习队列
 - 支持 typo 容错、英式 / 美式变体、错题回炉和间隔复习
+- 学习端和家长端带简单密码登录，避免公网裸露数据接口
+- 启动后会按天自动备份 SQLite 学习数据
 - 可选离线缓存中文释义、音标、音频和字体，减少对外网的依赖
 
 ## 页面与路由
@@ -31,7 +33,7 @@
 说明：
 
 - `/admin` 不是单独的 HTML 文件，而是同一个前端入口根据路径切换到家长模式
-- 目前代码里没有登录鉴权；如果要部署到公网，至少要在反向代理层做访问限制
+- `/` 和 `/admin` 使用不同密码；家长密码也可以访问学习端
 
 ## 运行环境
 
@@ -90,6 +92,10 @@ npm run cache:offline
   已提交的部署基线数据库。启动后它也会继续保存词条元数据、学习进度、答题记录和家长补词结果。
 - `data/study-config.json`
   本地学习配置。默认只有 `S` 级进入默写训练。
+- `data/auth-config.json`
+  本地生成的登录密码哈希和会话签名密钥。它不会提交到仓库；生产环境建议改用环境变量配置。
+- `data/backups/`
+  自动生成的每日 SQLite 备份目录。
 - `public/audio/`
   已提交的本地音频缓存目录。
 - `public/assets/fonts/` 和 `public/fonts.css`
@@ -110,6 +116,16 @@ npm run cache:offline
 - `npm run cache:offline`：补齐离线资源缓存
 
 ## 配置说明
+
+登录密码可用环境变量指定：
+
+```bash
+KET_STUDY_PASSWORD=孩子端密码
+KET_ADMIN_PASSWORD=家长端密码
+KET_SESSION_SECRET=一段足够长的随机字符串
+```
+
+如果没有设置，服务首次启动会自动生成 `data/auth-config.json`。
 
 默认默写等级配置保存在 `data/study-config.json`：
 

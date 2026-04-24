@@ -122,6 +122,48 @@ input {
   gap: 20px;
 }
 
+.auth-screen {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+  border-radius: 28px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+
+.auth-card h1 {
+  margin: 4px 0 0;
+  font-family: "Baloo 2", sans-serif;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.auth-input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(36, 48, 58, 0.12);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
+}
+
+.auth-error {
+  min-height: 1.4em;
+  color: #b13f3f;
+}
+
 .view {
   display: none;
 }
