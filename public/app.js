@@ -13,9 +13,6 @@ const state = {
   parentWordFilter: "",
   parentAddSubmitting: false,
   parentAddFeedback: null,
-  migrationStatus: null,
-  migrationSubmitting: false,
-  migrationFeedback: null,
   answerSubmitting: false,
   cardLoading: false,
   auth: null,
@@ -501,41 +498,8 @@ function renderParentInputPanel() {
       </div>
     `
     : "";
-  const migration = state.migrationStatus;
-  const migrationFeedback = state.migrationFeedback
-    ? `
-      <div class="parent-add-feedback ${state.migrationFeedback.type === "error" ? "error" : "success"}">
-        ${escapeHtml(state.migrationFeedback.message)}
-      </div>
-    `
-    : "";
-  const migrationStatusText = migration
-    ? migration.completed
-      ? "已完成双数据库迁移，当前进度从独立学习数据库读取。"
-      : migration.canMigrate
-        ? "检测到旧版单库数据，可以迁移为词库数据库 + 学习进度数据库。"
-        : "当前不能自动迁移，请确认新数据库文件没有残留，且旧数据库存在。"
-    : "正在检查数据存储状态…";
 
   parentInputPanel.innerHTML = `
-    <div class="parent-add-header">
-      <div>
-        <h2>数据存储迁移</h2>
-        <div class="muted">${migrationStatusText}</div>
-      </div>
-      <div class="parent-add-note">${migration?.mode === "split" ? "双数据库" : "旧版单库"}</div>
-    </div>
-    <div class="parent-add-actions">
-      <button
-        class="secondary-btn"
-        id="migrationButton"
-        ${!migration?.canMigrate || state.migrationSubmitting ? "disabled" : ""}
-      >
-        ${state.migrationSubmitting ? "正在迁移..." : "迁移到独立进度数据库"}
-      </button>
-      <div class="muted">迁移会先备份旧库；旧库不会删除，孩子的学习进度会复制到新的学习数据库。</div>
-    </div>
-    ${migrationFeedback}
     <div class="parent-add-header">
       <div>
         <h2>家长补充词</h2>
@@ -568,7 +532,6 @@ function renderParentInputPanel() {
     ${feedbackMarkup}
   `;
 
-  parentInputPanel.querySelector("#migrationButton").addEventListener("click", submitMigration);
   parentInputPanel.querySelector("#parentAddForm").addEventListener("submit", submitParentWord);
 }
 
@@ -1024,68 +987,6 @@ async function ensureParentWords(force = false) {
   }
 }
 
-async function ensureMigrationStatus() {
-  if (!state.isAdmin) {
-    return;
-  }
-
-  try {
-    state.migrationStatus = await requestJson("/api/admin/migration");
-  } catch (error) {
-    state.migrationFeedback = {
-      type: "error",
-      message: "迁移状态读取失败，请刷新后再试。",
-    };
-  }
-}
-
-async function submitMigration() {
-  if (!state.migrationStatus?.canMigrate || state.migrationSubmitting) {
-    return;
-  }
-
-  const confirmed = window.confirm(
-    "迁移前会备份旧数据库，并把词库和学习进度拆到两个新数据库。旧库不会删除。确认现在迁移吗？"
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  state.migrationSubmitting = true;
-  state.migrationFeedback = {
-    type: "success",
-    message: "正在迁移，请不要关闭页面…",
-  };
-  renderParentInputPanel();
-
-  try {
-    const payload = await requestJson("/api/admin/migration", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-
-    state.migrationStatus = payload.status;
-    state.overview = payload.overview;
-    state.parentWordsNeedRefresh = true;
-    state.migrationFeedback = {
-      type: "success",
-      message: "迁移完成，系统已经切换到独立学习进度数据库。",
-    };
-    renderOverview();
-    await ensureParentWords(true);
-  } catch (error) {
-    state.migrationFeedback = {
-      type: "error",
-      message: "迁移失败，旧数据库仍保留。请检查服务日志后再重试。",
-    };
-    renderParentInputPanel();
-  } finally {
-    state.migrationSubmitting = false;
-    renderParentInputPanel();
-  }
-}
-
 async function submitParentWord(event) {
   event.preventDefault();
 
@@ -1163,7 +1064,6 @@ function renderOverview() {
 async function loadAuthenticatedApp() {
   if (state.appLoaded) {
     state.overview = await requestJson("/api/overview");
-    await ensureMigrationStatus();
     renderOverview();
     return;
   }
@@ -1172,14 +1072,12 @@ async function loadAuthenticatedApp() {
     document.title = "词汇成长计划 · 家长看板";
     document.querySelector(".nav-tabs").style.display = "none";
     switchView("parent");
-    await ensureMigrationStatus();
     await ensureParentWords(true);
   }
 
   showStudyLoading();
 
   state.overview = await requestJson("/api/overview");
-  await ensureMigrationStatus();
   renderOverview();
 
   if (state.isAdmin) {

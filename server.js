@@ -30,7 +30,6 @@ const MIME_TYPES = {
 };
 
 let store;
-let wordlist = [];
 const authConfig = loadAuthConfig();
 
 function sendJson(response, statusCode, payload, headers = {}) {
@@ -46,6 +45,38 @@ function sendError(response, statusCode, message) {
   sendJson(response, statusCode, {
     error: message,
   });
+}
+
+function normalizeOptionKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[()\uFF08\uFF09]/g, "")
+    .replace(/[\uFF1B;\u3001\uFF0C,./\s-]+/g, "")
+    .trim();
+}
+
+function getOptionGroupKey(item, label = "") {
+  const termKey = normalizeOptionKey(item?.normalizedTerm || item?.term);
+  const labelKey = normalizeOptionKey(label);
+
+  if (["phone", "mobilephone", "cellphone", "telephone"].includes(termKey)) {
+    return "phone";
+  }
+
+  if (/(电话|手机|移动电话)/.test(labelKey)) {
+    return "phone";
+  }
+
+  if (termKey === "classroom" || /(教室|课堂)/.test(labelKey)) {
+    return "school-room";
+  }
+
+  if (termKey === "class") {
+    return "school-class";
+  }
+
+  return labelKey || termKey;
 }
 
 function readRequestBody(request) {
@@ -375,18 +406,20 @@ async function buildCard() {
   const distractorCandidates = await Promise.all(
     pool.slice(0, 10).map((item) => ensureWordMeaning(item))
   );
-  const usedMeanings = new Set([candidate.chineseMeaning || candidate.term]);
+  const candidateLabel = candidate.chineseMeaning || candidate.term;
+  const usedMeanings = new Set([getOptionGroupKey(candidate, candidateLabel)]);
 
   const distractors = [];
 
   for (const item of distractorCandidates) {
     const label = item.chineseMeaning || item.term;
+    const optionKey = getOptionGroupKey(item, label);
 
-    if (usedMeanings.has(label)) {
+    if (usedMeanings.has(optionKey)) {
       continue;
     }
 
-    usedMeanings.add(label);
+    usedMeanings.add(optionKey);
     distractors.push({
       wordId: item.wordId,
       label,
@@ -401,7 +434,7 @@ async function buildCard() {
     [
       {
         wordId: candidate.wordId,
-        label: candidate.chineseMeaning || candidate.term,
+        label: candidateLabel,
       },
       ...distractors,
     ].slice(0, 4)
@@ -620,34 +653,6 @@ async function handleApi(request, response, pathname) {
     return;
   }
 
-  if (request.method === "GET" && pathname === "/api/admin/migration") {
-    if (!requireAuth(request, response, "admin")) {
-      return;
-    }
-
-    sendJson(response, 200, store.getMigrationStatus());
-    return;
-  }
-
-  if (request.method === "POST" && pathname === "/api/admin/migration") {
-    if (!requireAuth(request, response, "admin")) {
-      return;
-    }
-
-    const result = store.migrateToSplitDatabases();
-    const previousStore = store;
-    store = createStore();
-    store.syncWords(wordlist);
-    previousStore.close();
-
-    sendJson(response, 200, {
-      ...result,
-      status: store.getMigrationStatus(),
-      overview: store.getOverview(),
-    });
-    return;
-  }
-
   if (request.method === "POST" && pathname === "/api/parent/words") {
     if (!requireAuth(request, response, "admin")) {
       return;
@@ -707,7 +712,6 @@ async function handleApi(request, response, pathname) {
 
 async function bootstrap() {
   const words = await ensureWordlistJson();
-  wordlist = words;
   store = createStore();
   store.syncWords(words);
   startBackupScheduler();
