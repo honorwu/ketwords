@@ -610,15 +610,18 @@ function renderParentWordPanel() {
 }
 
 function renderStudyPlanMini() {
-  const { plan, exam } = state.overview;
+  const { today } = state.overview;
+  const answerCount = (value) => {
+    const count = Number(value);
+    return Number.isFinite(count) ? count : 0;
+  };
 
   studyPlanMini.className = "study-plan-mini";
   studyPlanMini.innerHTML = `
-    <div class="mini-line"><strong>${exam.daysRemaining}</strong> 天后考试</div>
-    <div class="mini-line"><strong>${plan.dueReviewCount}</strong> 个词今天到期</div>
-    <div class="mini-line"><strong>${plan.suggestedNewWords}</strong> 个建议新词</div>
-    <div class="mini-line"><strong>${plan.usedMinutes}</strong> / ${plan.targetMinutes} 分钟</div>
-    <div class="mini-line">${state.encouragement}</div>
+    <div class="mini-line"><strong>${answerCount(today.cards)}</strong> 次回答</div>
+    <div class="mini-line"><strong>${answerCount(today.recognizeCards)}</strong> 次认词</div>
+    <div class="mini-line"><strong>${answerCount(today.listenCards)}</strong> 次听词</div>
+    <div class="mini-line"><strong>${answerCount(today.spellCards)}</strong> 次拼词</div>
   `;
 }
 
