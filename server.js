@@ -699,7 +699,7 @@ async function bootstrap() {
   });
 
   server.listen(PORT, () => {
-    console.log(`KET words server running at http://localhost:${PORT}`);
+    console.log(`Vocabulary trainer running at http://localhost:${PORT}`);
   });
 }
 

@@ -479,6 +479,10 @@ input {
   background: linear-gradient(135deg, #79a9ff, #8ed6ff);
 }
 
+.bar-fill.green {
+  background: linear-gradient(135deg, var(--green), #9ee6b0);
+}
+
 .trend-list {
   display: grid;
   gap: 10px;

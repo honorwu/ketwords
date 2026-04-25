@@ -203,6 +203,22 @@ function buildMetricCard(label, value, sub) {
   `;
 }
 
+function formatMinutesValue(minutes, elapsedMs = 0) {
+  const numericMinutes = Number(minutes);
+
+  if (Number.isFinite(numericMinutes)) {
+    return numericMinutes;
+  }
+
+  const numericElapsedMs = Number(elapsedMs);
+
+  if (Number.isFinite(numericElapsedMs) && numericElapsedMs > 0) {
+    return Math.max(1, Math.round(numericElapsedMs / 60000));
+  }
+
+  return 0;
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -330,13 +346,27 @@ function renderProgress() {
       </div>
       <div class="progress-item">
         <div class="progress-top">
-          <strong>全部词库目标</strong>
-          <span>${progress.coreMastered} / ${progress.coreGoalCount}</span>
+          <strong>认词进度</strong>
+          <span>${progress.recognizeMastered} / ${progress.recognizeGoalCount}</span>
         </div>
-        <div class="bar"><div class="bar-fill blue" style="width:${formatPercent(progress.coreMastered, progress.coreGoalCount)}"></div></div>
+        <div class="bar"><div class="bar-fill blue" style="width:${formatPercent(progress.recognizeMastered, progress.recognizeGoalCount)}"></div></div>
+      </div>
+      <div class="progress-item">
+        <div class="progress-top">
+          <strong>听词进度</strong>
+          <span>${progress.listenMastered} / ${progress.listenGoalCount}</span>
+        </div>
+        <div class="bar"><div class="bar-fill green" style="width:${formatPercent(progress.listenMastered, progress.listenGoalCount)}"></div></div>
+      </div>
+      <div class="progress-item">
+        <div class="progress-top">
+          <strong>拼写进度</strong>
+          <span>${progress.spellMastered} / ${progress.spellGoalCount}</span>
+        </div>
+        <div class="bar"><div class="bar-fill" style="width:${formatPercent(progress.spellMastered, progress.spellGoalCount)}"></div></div>
       </div>
     </div>
-    <p class="muted">总词库一共有 ${progress.totalWords} 个词。当前设置里，${spellLevels} 级会进入默写训练，后面可以升级而不丢进度。</p>
+    <p class="muted">总词库一共有 ${progress.totalWords} 个词。认词和听词按全部词库统计；${spellLevels} 级会继续进入默写训练。</p>
   `;
 }
 
@@ -369,9 +399,14 @@ function renderFocusWords() {
 
 function renderParentDashboard() {
   const { progress, today, parentMessage, cumulative } = state.overview;
+  const todayMinutes = formatMinutesValue(today.minutes);
+  const cumulativeMinutes = formatMinutesValue(
+    cumulative.totalMinutes,
+    cumulative.totalElapsedMs
+  );
 
   parentStats.innerHTML = [
-    buildMetricCard("学习时长", `${today.minutes} / ${cumulative.totalMinutes} 分钟`, `今日 / 累计，今天完成 ${today.cards} 次答题`),
+    buildMetricCard("学习时长", `${todayMinutes} / ${cumulativeMinutes} 分钟`, `今日 / 累计，今天完成 ${today.cards} 次答题`),
     buildMetricCard("累计答题次数", `${cumulative.totalAttempts} 次`, `累计学过 ${cumulative.studiedWords} 个词`),
     buildMetricCard("累计掌握词数", `${cumulative.masteredWords} 个`, `总词库 ${progress.totalWords} 个`),
     buildMetricCard("今日正确率", `${today.correctRate}%`, `包含近似拼写的容错`),
@@ -406,28 +441,28 @@ function renderParentDashboard() {
     <div class="progress-list">
       <div class="progress-item">
         <div class="progress-top">
-          <strong>全部词库推进</strong>
-          <span>${formatPercent(progress.coreMastered, progress.coreGoalCount)}</span>
-        </div>
-        <div class="bar"><div class="bar-fill orange" style="width:${formatPercent(progress.coreMastered, progress.coreGoalCount)}"></div></div>
-      </div>
-      <div class="progress-item">
-        <div class="progress-top">
-          <strong>识别词</strong>
+          <strong>认词进度</strong>
           <span>${progress.recognizeMastered} / ${progress.recognizeGoalCount}</span>
         </div>
         <div class="bar"><div class="bar-fill blue" style="width:${formatPercent(progress.recognizeMastered, progress.recognizeGoalCount)}"></div></div>
       </div>
       <div class="progress-item">
         <div class="progress-top">
-          <strong>重点拼写词</strong>
+          <strong>听词进度</strong>
+          <span>${progress.listenMastered} / ${progress.listenGoalCount}</span>
+        </div>
+        <div class="bar"><div class="bar-fill green" style="width:${formatPercent(progress.listenMastered, progress.listenGoalCount)}"></div></div>
+      </div>
+      <div class="progress-item">
+        <div class="progress-top">
+          <strong>拼写进度</strong>
           <span>${progress.spellMastered} / ${progress.spellGoalCount}</span>
         </div>
         <div class="bar"><div class="bar-fill" style="width:${formatPercent(progress.spellMastered, progress.spellGoalCount)}"></div></div>
       </div>
     </div>
     <p class="muted">${parentMessage}</p>
-    <p class="muted">这里的重点拼写词不是官方单独给出的数量，而是这版系统按优先级挑出来的写作重点词。</p>
+    <p class="muted">认词和听词按全部词库统计；拼写只统计当前需要进入默写训练的词。</p>
   `;
 
   mistakePanel.innerHTML = `
