@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
 const crypto = require("node:crypto");
+const { execFileSync } = require("node:child_process");
 const { ensureWordlistJson } = require("./lib/wordlist");
 const { createStore } = require("./lib/store");
 const { ensureWordOfflineData } = require("./lib/offline-cache");
@@ -15,6 +16,10 @@ const SESSION_COOKIE = "ket_session";
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const BACKUP_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const BACKUP_RETENTION_DAYS = Number(process.env.KET_BACKUP_RETENTION_DAYS || 30);
+const BUILD_INFO = {
+  commit: readBuildCommit(),
+  startedAt: new Date().toISOString(),
+};
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -45,6 +50,28 @@ function sendError(response, statusCode, message) {
   sendJson(response, statusCode, {
     error: message,
   });
+}
+
+function readBuildCommit() {
+  const envCommit =
+    process.env.GIT_COMMIT ||
+    process.env.RENDER_GIT_COMMIT ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.COMMIT_SHA;
+
+  if (envCommit) {
+    return envCommit.slice(0, 12);
+  }
+
+  try {
+    return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+      cwd: __dirname,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch (_) {
+    return null;
+  }
 }
 
 function normalizeOptionKey(value) {
@@ -620,6 +647,8 @@ async function handleApi(request, response, pathname) {
   if (request.method === "GET" && pathname === "/api/health") {
     sendJson(response, 200, {
       ok: true,
+      build: BUILD_INFO,
+      runtime: store?.getDiagnostics ? store.getDiagnostics() : null,
     });
     return;
   }
