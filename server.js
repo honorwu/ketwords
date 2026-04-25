@@ -30,6 +30,7 @@ const MIME_TYPES = {
 };
 
 let store;
+let wordlist = [];
 const authConfig = loadAuthConfig();
 
 function sendJson(response, statusCode, payload, headers = {}) {
@@ -619,6 +620,34 @@ async function handleApi(request, response, pathname) {
     return;
   }
 
+  if (request.method === "GET" && pathname === "/api/admin/migration") {
+    if (!requireAuth(request, response, "admin")) {
+      return;
+    }
+
+    sendJson(response, 200, store.getMigrationStatus());
+    return;
+  }
+
+  if (request.method === "POST" && pathname === "/api/admin/migration") {
+    if (!requireAuth(request, response, "admin")) {
+      return;
+    }
+
+    const result = store.migrateToSplitDatabases();
+    const previousStore = store;
+    store = createStore();
+    store.syncWords(wordlist);
+    previousStore.close();
+
+    sendJson(response, 200, {
+      ...result,
+      status: store.getMigrationStatus(),
+      overview: store.getOverview(),
+    });
+    return;
+  }
+
   if (request.method === "POST" && pathname === "/api/parent/words") {
     if (!requireAuth(request, response, "admin")) {
       return;
@@ -678,6 +707,7 @@ async function handleApi(request, response, pathname) {
 
 async function bootstrap() {
   const words = await ensureWordlistJson();
+  wordlist = words;
   store = createStore();
   store.syncWords(words);
   startBackupScheduler();
