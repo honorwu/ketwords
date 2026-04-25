@@ -330,7 +330,7 @@ function renderProgress() {
       </div>
       <div class="progress-item">
         <div class="progress-top">
-          <strong>核心目标</strong>
+          <strong>全部词库目标</strong>
           <span>${progress.coreMastered} / ${progress.coreGoalCount}</span>
         </div>
         <div class="bar"><div class="bar-fill blue" style="width:${formatPercent(progress.coreMastered, progress.coreGoalCount)}"></div></div>
@@ -371,11 +371,11 @@ function renderParentDashboard() {
   const { progress, today, parentMessage, cumulative } = state.overview;
 
   parentStats.innerHTML = [
-    buildMetricCard("今日学习时长", `${today.minutes} 分钟`, `今天完成 ${today.cards} 次答题`),
+    buildMetricCard("学习时长", `${today.minutes} / ${cumulative.totalMinutes} 分钟`, `今日 / 累计，今天完成 ${today.cards} 次答题`),
     buildMetricCard("累计答题次数", `${cumulative.totalAttempts} 次`, `累计学过 ${cumulative.studiedWords} 个词`),
     buildMetricCard("累计掌握词数", `${cumulative.masteredWords} 个`, `总词库 ${progress.totalWords} 个`),
     buildMetricCard("今日正确率", `${today.correctRate}%`, `包含近似拼写的容错`),
-    buildMetricCard("核心目标进度", `${progress.coreMastered}/${progress.coreGoalCount}`, `还差 ${progress.coreGap} 个`),
+    buildMetricCard("全部词库进度", `${progress.coreMastered}/${progress.coreGoalCount}`, `还差 ${progress.coreGap} 个`),
     buildMetricCard(
       "考试前预计完成",
       `${progress.projectedPercent}%`,
@@ -406,7 +406,7 @@ function renderParentDashboard() {
     <div class="progress-list">
       <div class="progress-item">
         <div class="progress-top">
-          <strong>核心词推进</strong>
+          <strong>全部词库推进</strong>
           <span>${formatPercent(progress.coreMastered, progress.coreGoalCount)}</span>
         </div>
         <div class="bar"><div class="bar-fill orange" style="width:${formatPercent(progress.coreMastered, progress.coreGoalCount)}"></div></div>
@@ -1034,7 +1034,7 @@ async function loadAuthenticatedApp() {
   }
 
   if (state.isAdmin) {
-    document.title = "KET 家长看板";
+    document.title = "词汇成长计划 · 家长看板";
     document.querySelector(".nav-tabs").style.display = "none";
     switchView("parent");
     await ensureParentWords(true);
