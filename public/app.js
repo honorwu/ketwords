@@ -15,6 +15,10 @@ const state = {
   parentAddFeedback: null,
   answerSubmitting: false,
   cardLoading: false,
+  studyTimerStartedAt: 0,
+  studyTimerId: null,
+  studyElapsedSeconds: 0,
+  studyDisplayStats: null,
   auth: null,
   appLoaded: false,
   audioAutoPlayTimer: null,
@@ -80,11 +84,13 @@ navTabs.forEach((button) => {
       return;
     }
 
+    stopStudyTimer({ reset: true });
     switchView(button.dataset.view);
   });
 });
 
 function endStudySession() {
+  stopStudyTimer({ reset: true });
   switchView("home");
 }
 
@@ -95,6 +101,7 @@ startStudyButton.addEventListener("click", () => {
 
 function beginStudySession() {
   switchView("study");
+  startStudyTimer();
 
   if (!state.currentCard && !state.cardLoading) {
     loadNextCard({ showLoading: true });
@@ -217,6 +224,97 @@ function formatMinutesValue(minutes, elapsedMs = 0) {
   }
 
   return 0;
+}
+
+function numberValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function getStudyDisplayToday() {
+  const today = state.overview?.today || {};
+  const displayStats = state.studyDisplayStats || {};
+  const keys = ["cards", "recognizeCards", "listenCards", "spellCards"];
+  const merged = { ...today };
+
+  keys.forEach((key) => {
+    merged[key] = Math.max(numberValue(today[key]), numberValue(displayStats[key]));
+  });
+
+  return merged;
+}
+
+function applyLocalStudyAttempt(mode, previousToday) {
+  if (!state.overview?.today) {
+    return;
+  }
+
+  const modeKey = {
+    recognize: "recognizeCards",
+    listen: "listenCards",
+    spell: "spellCards",
+  }[mode];
+
+  const keys = ["cards", "recognizeCards", "listenCards", "spellCards"];
+  const nextStats = {};
+
+  keys.forEach((key) => {
+    nextStats[key] = Math.max(
+      numberValue(state.overview.today[key]),
+      numberValue(previousToday[key])
+    );
+  });
+
+  nextStats.cards = Math.max(
+    numberValue(state.overview.today.cards),
+    numberValue(previousToday.cards) + 1
+  );
+
+  if (modeKey) {
+    nextStats[modeKey] = Math.max(
+      numberValue(state.overview.today[modeKey]),
+      numberValue(previousToday[modeKey]) + 1
+    );
+  }
+
+  state.studyDisplayStats = nextStats;
+}
+
+function updateStudyTimer() {
+  if (!state.studyTimerStartedAt) {
+    return;
+  }
+
+  state.studyElapsedSeconds = Math.max(
+    0,
+    Math.floor((Date.now() - state.studyTimerStartedAt) / 1000)
+  );
+  renderStudyPlanMini();
+}
+
+function startStudyTimer() {
+  if (state.studyTimerId) {
+    return;
+  }
+
+  state.studyTimerStartedAt = Date.now() - state.studyElapsedSeconds * 1000;
+  updateStudyTimer();
+  state.studyTimerId = window.setInterval(updateStudyTimer, 1000);
+}
+
+function stopStudyTimer({ reset = false } = {}) {
+  if (state.studyTimerId) {
+    window.clearInterval(state.studyTimerId);
+  }
+
+  state.studyTimerId = null;
+  state.studyTimerStartedAt = 0;
+
+  if (reset) {
+    state.studyElapsedSeconds = 0;
+  }
+
+  renderStudyPlanMini();
 }
 
 function escapeHtml(value) {
@@ -610,18 +708,19 @@ function renderParentWordPanel() {
 }
 
 function renderStudyPlanMini() {
-  const { today } = state.overview;
-  const answerCount = (value) => {
-    const count = Number(value);
-    return Number.isFinite(count) ? count : 0;
-  };
+  if (!state.overview) {
+    return;
+  }
+
+  const today = getStudyDisplayToday();
 
   studyPlanMini.className = "study-plan-mini";
   studyPlanMini.innerHTML = `
-    <div class="mini-line"><strong>${answerCount(today.cards)}</strong> 次回答</div>
-    <div class="mini-line"><strong>${answerCount(today.recognizeCards)}</strong> 次认词</div>
-    <div class="mini-line"><strong>${answerCount(today.listenCards)}</strong> 次听词</div>
-    <div class="mini-line"><strong>${answerCount(today.spellCards)}</strong> 次拼词</div>
+    <div class="mini-line timer-line"><strong>${state.studyElapsedSeconds}</strong> 秒学习</div>
+    <div class="mini-line"><strong>${numberValue(today.cards)}</strong> 次回答</div>
+    <div class="mini-line"><strong>${numberValue(today.recognizeCards)}</strong> 次认词</div>
+    <div class="mini-line"><strong>${numberValue(today.listenCards)}</strong> 次听词</div>
+    <div class="mini-line"><strong>${numberValue(today.spellCards)}</strong> 次拼词</div>
   `;
 }
 
@@ -802,6 +901,7 @@ function renderStudyDone(message) {
   `;
 
   studyPanel.querySelector("#doneHomeButton").addEventListener("click", () => {
+    stopStudyTimer({ reset: true });
     switchView("home");
   });
 }
@@ -854,6 +954,29 @@ function setAnswerControlsDisabled(disabled) {
     });
 }
 
+function markChoiceResult({ selectedChoiceId, correctWordId, gaveUp }) {
+  if (state.currentCard?.mode === "spell") {
+    return;
+  }
+
+  studyPanel.querySelectorAll(".option-btn").forEach((button) => {
+    const choiceId = Number(button.dataset.choice);
+    const isCorrect = choiceId === Number(correctWordId);
+    const isSelected = choiceId === Number(selectedChoiceId);
+
+    button.classList.remove("selected");
+    button.classList.toggle("correct-answer", isCorrect);
+    button.classList.toggle("wrong-answer", isSelected && !isCorrect && !gaveUp);
+
+    if (isCorrect || (isSelected && !isCorrect && !gaveUp)) {
+      const marker = document.createElement("span");
+      marker.className = "answer-marker";
+      marker.textContent = isCorrect ? "正确答案" : "你的答案";
+      button.appendChild(marker);
+    }
+  });
+}
+
 async function submitAnswer({ gaveUp = false } = {}) {
   if (!state.currentCard || state.answerSubmitting) {
     return;
@@ -865,6 +988,7 @@ async function submitAnswer({ gaveUp = false } = {}) {
 
   state.answerSubmitting = true;
   setAnswerControlsDisabled(true);
+  const previousToday = getStudyDisplayToday();
 
   const payload = {
     wordId: state.currentCard.wordId,
@@ -900,9 +1024,15 @@ async function submitAnswer({ gaveUp = false } = {}) {
   }
 
   state.overview = result.overview;
+  applyLocalStudyAttempt(payload.mode, previousToday);
   state.parentWordsNeedRefresh = true;
   renderOverview();
   prefetchNextCard();
+  markChoiceResult({
+    selectedChoiceId: payload.choiceWordId,
+    correctWordId: payload.wordId,
+    gaveUp: payload.gaveUp,
+  });
 
   const feedbackArea = studyPanel.querySelector("#feedbackArea");
   const cssClass =
@@ -919,20 +1049,24 @@ async function submitAnswer({ gaveUp = false } = {}) {
           ? "答对了"
           : result.evaluation.result === "almost"
             ? "很接近"
-            : "这题先记下来"
+            : "答错了，正确答案看这里"
       }</strong>
       <p>${result.evaluation.note}</p>
       <p>当前状态：${result.masteryLabel}</p>
-      <button class="primary-btn" id="nextCardButton">下一个</button>
     </div>
   `;
 
-  const nextButton = feedbackArea.querySelector("#nextCardButton");
-  nextButton.addEventListener("click", async () => {
-    nextButton.disabled = true;
-    nextButton.textContent = "正在准备...";
+  const submitButton = studyPanel.querySelector("#submitButton");
+
+  submitButton.disabled = false;
+  submitButton.textContent = "下一个";
+  submitButton.classList.add("next-ready");
+  submitButton.focus({ preventScroll: true });
+  submitButton.addEventListener("click", async () => {
+    submitButton.disabled = true;
+    submitButton.textContent = "正在准备...";
     await loadNextCard();
-  });
+  }, { once: true });
 }
 
 async function loadNextCard({ showLoading = false } = {}) {
@@ -1067,6 +1201,7 @@ function renderOverview() {
 async function loadAuthenticatedApp() {
   if (state.appLoaded) {
     state.overview = await requestJson("/api/overview");
+    state.studyDisplayStats = null;
     renderOverview();
     return;
   }
@@ -1081,6 +1216,7 @@ async function loadAuthenticatedApp() {
   showStudyLoading();
 
   state.overview = await requestJson("/api/overview");
+  state.studyDisplayStats = null;
   renderOverview();
 
   if (state.isAdmin) {
