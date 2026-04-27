@@ -22,6 +22,7 @@ const state = {
   auth: null,
   appLoaded: false,
   audioAutoPlayTimer: null,
+  resultAudioContext: null,
   encouragement: "",
 };
 
@@ -762,11 +763,75 @@ function fallbackSpeak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
+function ensureResultAudioContext() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContext) {
+    return null;
+  }
+
+  if (!state.resultAudioContext) {
+    state.resultAudioContext = new AudioContext();
+  }
+
+  if (state.resultAudioContext.state === "suspended") {
+    state.resultAudioContext.resume().catch(() => {});
+  }
+
+  return state.resultAudioContext;
+}
+
+function playResultSound(result) {
+  const context = ensureResultAudioContext();
+
+  if (!context) {
+    return;
+  }
+
+  const now = context.currentTime;
+  const isCorrect = result === "correct" || result === "almost";
+  const notes = isCorrect
+    ? [
+        { frequency: 660, start: 0, duration: 0.14, volume: 0.3 },
+        { frequency: 880, start: 0.12, duration: 0.18, volume: 0.32 },
+        { frequency: 1046, start: 0.28, duration: 0.16, volume: 0.28 },
+      ]
+    : [
+        { frequency: 220, start: 0, duration: 0.22, volume: 0.34 },
+        { frequency: 165, start: 0.2, duration: 0.28, volume: 0.36 },
+        { frequency: 130, start: 0.46, duration: 0.26, volume: 0.3 },
+      ];
+
+  notes.forEach((note) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+
+    oscillator.type = isCorrect ? "sine" : "triangle";
+    oscillator.frequency.setValueAtTime(note.frequency, now + note.start);
+    gain.gain.setValueAtTime(0.0001, now + note.start);
+    gain.gain.exponentialRampToValueAtTime(note.volume, now + note.start + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + note.start + note.duration);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now + note.start);
+    oscillator.stop(now + note.start + note.duration + 0.02);
+  });
+
+}
+
 function scheduleAutoPlay() {
   window.clearTimeout(state.audioAutoPlayTimer);
   state.audioAutoPlayTimer = window.setTimeout(() => {
     playCardAudio();
   }, 120);
+}
+
+function focusSpellInput() {
+  const spellInput = studyPanel.querySelector("#spellInput");
+
+  if (spellInput) {
+    spellInput.focus({ preventScroll: true });
+  }
 }
 
 function renderCard(card) {
@@ -798,19 +863,26 @@ function renderCard(card) {
       : "";
   const modeTip =
     card.mode === "spell"
-      ? `${card.chineseMeaning}，输入完成后再提交。`
+      ? ""
       : card.mode === "listen"
         ? "系统会自动播放，也可以手动再听一遍。"
         : "先看英文，再选出最合适的中文意思。";
+  const modeTipMarkup = modeTip
+    ? `
+        <div class="mode-tip">
+          ${modeTip}
+        </div>
+      `
+    : "";
 
   const optionMarkup =
     card.mode === "spell"
       ? `
         <div class="spell-box">
-          <div class="hint-box">提示：${card.hint}</div>
           <input class="spell-input" id="spellInput" placeholder="输入英文后再提交" autocomplete="off" />
           <div class="action-row">
             <button class="secondary-btn" id="audioButton">听发音</button>
+            <button class="secondary-btn dont-know-btn" id="dontKnowButton">不会</button>
             <button class="submit-btn" id="submitButton">提交答案</button>
           </div>
         </div>
@@ -847,9 +919,7 @@ function renderCard(card) {
           <div class="prompt-title">${promptTitle}</div>
           ${phoneticLine}
         </div>
-        <div class="mode-tip">
-          ${modeTip}
-        </div>
+        ${modeTipMarkup}
       </div>
       ${flowNote}
       ${exampleLine}
@@ -866,9 +936,11 @@ function renderCard(card) {
   if (card.mode === "spell") {
     studyPanel.querySelector("#spellInput").addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
+        event.preventDefault();
         submitAnswer();
       }
     });
+    focusSpellInput();
   } else {
     studyPanel.querySelectorAll(".option-btn").forEach((button) => {
       button.addEventListener("click", () => {
@@ -988,6 +1060,7 @@ async function submitAnswer({ gaveUp = false } = {}) {
 
   state.answerSubmitting = true;
   setAnswerControlsDisabled(true);
+  ensureResultAudioContext();
   const previousToday = getStudyDisplayToday();
 
   const payload = {
@@ -997,6 +1070,9 @@ async function submitAnswer({ gaveUp = false } = {}) {
   };
 
   if (state.currentCard.mode === "spell") {
+    if (gaveUp) {
+      payload.gaveUp = true;
+    }
     payload.response = studyPanel.querySelector("#spellInput").value.trim();
   } else if (gaveUp) {
     payload.gaveUp = true;
@@ -1028,6 +1104,7 @@ async function submitAnswer({ gaveUp = false } = {}) {
   state.parentWordsNeedRefresh = true;
   renderOverview();
   prefetchNextCard();
+  playResultSound(result.evaluation.result);
   markChoiceResult({
     selectedChoiceId: payload.choiceWordId,
     correctWordId: payload.wordId,
@@ -1100,6 +1177,7 @@ async function loadNextCard({ showLoading = false } = {}) {
     renderStudyDone(payload.message);
   } else {
     renderCard(payload.card);
+    focusSpellInput();
   }
 
   state.cardLoading = false;

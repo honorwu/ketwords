@@ -667,6 +667,9 @@ input {
   border-radius: 18px;
   border: 1px solid rgba(36, 48, 58, 0.12);
   background: rgba(255, 255, 255, 0.94);
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 .hint-box,
@@ -690,6 +693,16 @@ input {
   border: 1px solid rgba(79, 176, 163, 0.18);
   display: grid;
   gap: 8px;
+  font-size: 1.16rem;
+  line-height: 1.45;
+}
+
+.feedback strong {
+  font-size: 1.4rem;
+}
+
+.feedback p {
+  margin: 0;
 }
 
 .feedback.wrong {
@@ -700,7 +713,7 @@ input {
 }
 
 .feedback.wrong strong {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
 }
 
 .feedback.wrong p:first-of-type {

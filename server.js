@@ -740,9 +740,13 @@ async function handleApi(request, response, pathname) {
 }
 
 async function bootstrap() {
-  const words = await ensureWordlistJson();
   store = createStore();
-  store.syncWords(words);
+
+  if (store.getWordCount() === 0) {
+    const words = await ensureWordlistJson();
+    store.syncWords(words);
+  }
+
   startBackupScheduler();
 
   const server = http.createServer(async (request, response) => {
