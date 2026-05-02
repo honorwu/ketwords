@@ -662,6 +662,16 @@ async function handleApi(request, response, pathname) {
     return;
   }
 
+  if (request.method === "GET" && pathname.startsWith("/api/checkin")) {
+    if (!requireAuth(request, response, "study")) {
+      return;
+    }
+
+    const offset = Number(url.searchParams.get("offset") || "0");
+    sendJson(response, 200, store.getDailyActivity(120, offset));
+    return;
+  }
+
   if (request.method === "GET" && pathname === "/api/study/next") {
     if (!requireAuth(request, response, "study")) {
       return;

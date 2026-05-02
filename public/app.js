@@ -24,6 +24,8 @@ const state = {
   audioAutoPlayTimer: null,
   resultAudioContext: null,
   encouragement: "",
+  checkinCache: {},
+  spellInputValue: "",
 };
 
 const ENCOURAGEMENTS = [
@@ -389,11 +391,15 @@ function renderHero() {
       </div>
       <div class="checkin-card">
         <div class="checkin-card-top">
-          <div>
+          <div class="checkin-card-title">
             <div class="metric-label">${checkin.monthLabel} 打卡</div>
             <div class="checkin-streak">${checkin.currentStreak} 天</div>
           </div>
-          <div class="checkin-best">最佳 ${checkin.bestStreak} 天</div>
+          <div class="checkin-card-nav">
+            <button class="checkin-nav-btn" id="checkinPrevBtn">&#8249;</button>
+            <div class="checkin-best">最佳 ${checkin.bestStreak} 天</div>
+            <button class="checkin-nav-btn" id="checkinNextBtn">&#8250;</button>
+          </div>
         </div>
         <div class="week-labels">
           <span>一</span>
@@ -427,6 +433,39 @@ function renderHero() {
   heroCard.querySelector("#heroStartButton").addEventListener("click", () => {
     beginStudySession();
   });
+
+  heroCard.querySelector("#checkinPrevBtn").addEventListener("click", () => {
+    const currentOffset = state.overview?.checkin?.monthOffset || 0;
+    loadCheckinMonth(currentOffset - 1);
+  });
+
+  heroCard.querySelector("#checkinNextBtn").addEventListener("click", () => {
+    const currentOffset = state.overview?.checkin?.monthOffset || 0;
+    loadCheckinMonth(currentOffset + 1);
+  });
+}
+
+async function loadCheckinMonth(offset) {
+  if (offset === 0) {
+    state.overview.checkin = state.checkinCache[0];
+    renderHero();
+    return;
+  }
+
+  if (state.checkinCache[offset]) {
+    state.overview.checkin = state.checkinCache[offset];
+    renderHero();
+    return;
+  }
+
+  try {
+    const data = await requestJson(`/api/checkin?offset=${offset}`);
+    state.checkinCache[offset] = data;
+    state.overview.checkin = data;
+    renderHero();
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 function renderProgress() {
@@ -826,12 +865,62 @@ function scheduleAutoPlay() {
   }, 120);
 }
 
-function focusSpellInput() {
-  const spellInput = studyPanel.querySelector("#spellInput");
+function renderSpellUnderlines() {
+  const container = studyPanel.querySelector("#spellUnderlines");
+  if (!container) return;
 
-  if (spellInput) {
-    spellInput.focus({ preventScroll: true });
+  const card = state.currentCard;
+  const maxLen = card.baseTerm.replace(/[^a-zA-Z-]/g, "").length;
+  container.innerHTML = Array.from({ length: maxLen }, (_, i) => {
+    const char = state.spellInputValue[i] || "";
+    return `<span class="spell-char" data-index="${i}">${char}</span>`;
+  }).join("");
+}
+
+function setupSpellKeyboard() {
+  document.removeEventListener("keydown", handleSpellKeydown);
+  document.addEventListener("keydown", handleSpellKeydown);
+}
+
+function handleSpellKeydown(event) {
+  if (state.currentCard?.mode !== "spell") return;
+  if (state.answerSubmitting) return;
+
+  const card = state.currentCard;
+  const maxLen = card.baseTerm.replace(/[^a-zA-Z-]/g, "").length;
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    submitAnswer();
+    return;
   }
+
+  if (event.key === "Backspace") {
+    event.preventDefault();
+    if (state.spellInputValue.length > 0) {
+      state.spellInputValue = state.spellInputValue.slice(0, -1);
+      renderSpellUnderlines();
+    }
+    return;
+  }
+
+  if (event.key === "Delete" || event.key === "Escape") {
+    event.preventDefault();
+    state.spellInputValue = "";
+    renderSpellUnderlines();
+    return;
+  }
+
+  const char = event.key.toLowerCase();
+  if (/^[a-z-]$/.test(char) && state.spellInputValue.length < maxLen) {
+    event.preventDefault();
+    state.spellInputValue += char;
+    renderSpellUnderlines();
+  }
+}
+
+function focusSpellInput() {
+  // no-op, spell uses keyboard now
 }
 
 function renderCard(card) {
@@ -879,7 +968,7 @@ function renderCard(card) {
     card.mode === "spell"
       ? `
         <div class="spell-box">
-          <input class="spell-input" id="spellInput" placeholder="输入英文后再提交" autocomplete="off" />
+          <div class="spell-underlines" id="spellUnderlines"></div>
           <div class="action-row">
             <button class="secondary-btn" id="audioButton">听发音</button>
             <button class="secondary-btn dont-know-btn" id="dontKnowButton">不会</button>
@@ -934,13 +1023,9 @@ function renderCard(card) {
   scheduleAutoPlay();
 
   if (card.mode === "spell") {
-    studyPanel.querySelector("#spellInput").addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        submitAnswer();
-      }
-    });
-    focusSpellInput();
+    state.spellInputValue = "";
+    renderSpellUnderlines();
+    setupSpellKeyboard();
   } else {
     studyPanel.querySelectorAll(".option-btn").forEach((button) => {
       button.addEventListener("click", () => {
@@ -1073,7 +1158,7 @@ async function submitAnswer({ gaveUp = false } = {}) {
     if (gaveUp) {
       payload.gaveUp = true;
     }
-    payload.response = studyPanel.querySelector("#spellInput").value.trim();
+    payload.response = state.spellInputValue;
   } else if (gaveUp) {
     payload.gaveUp = true;
   } else {
@@ -1132,6 +1217,20 @@ async function submitAnswer({ gaveUp = false } = {}) {
       <p>当前状态：${result.masteryLabel}</p>
     </div>
   `;
+
+  if (state.currentCard.mode === "spell" && result.evaluation.result === "wrong") {
+    const acceptedText = (result.evaluation.acceptedText || state.currentCard.baseTerm).replace(/[^a-zA-Z-]/g, "");
+    const container = studyPanel.querySelector("#spellUnderlines");
+    if (container) {
+      container.querySelectorAll(".spell-char").forEach((span, i) => {
+        const inputChar = state.spellInputValue[i] || "";
+        const correctChar = acceptedText[i] || "";
+        if (inputChar && inputChar.toLowerCase() !== correctChar.toLowerCase()) {
+          span.classList.add("wrong-char");
+        }
+      });
+    }
+  }
 
   const submitButton = studyPanel.querySelector("#submitButton");
 
