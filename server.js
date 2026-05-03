@@ -4,7 +4,6 @@ const http = require("node:http");
 const { execFileSync } = require("node:child_process");
 const { ensureWordlistJson } = require("./lib/wordlist");
 const { createStore } = require("./lib/store");
-const { ensureWordOfflineData } = require("./lib/offline-cache");
 const { createAuth } = require("./lib/auth");
 const { createBackupScheduler } = require("./lib/backup-scheduler");
 const { createCardBuilder } = require("./lib/study-card");
@@ -249,41 +248,7 @@ async function handleApi(request, response, url) {
     }
 
     sendJson(response, 200, {
-      words: store.getParentWords(),
-    });
-    return;
-  }
-
-  if (request.method === "POST" && pathname === "/api/parent/words") {
-    if (!requireAuth(request, response, "admin")) {
-      return;
-    }
-
-    const body = await readRequestBody(request);
-
-    if (!body.term) {
-      sendError(response, 400, "请先输入要补充的英文单词或词组。");
-      return;
-    }
-
-    const result = store.addParentWord({
-      term: body.term,
-      meaning: body.meaning,
-    });
-
-    const enriched = await ensureWordOfflineData(store, result.state, {
-      allowNetwork: true,
-    });
-
-    sendJson(response, 200, {
-      action: result.action,
-      word: {
-        wordId: enriched.wordId,
-        term: enriched.term,
-        meaning: enriched.chineseMeaning || "",
-        audioUrl: enriched.audioUrl || "",
-      },
-      overview: store.getOverview(),
+      words: store.getWordProgress(),
     });
     return;
   }

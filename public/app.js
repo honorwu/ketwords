@@ -11,8 +11,6 @@ const state = {
   parentWordsNeedRefresh: true,
   parentWordsLoading: false,
   parentWordFilter: "",
-  parentAddSubmitting: false,
-  parentAddFeedback: null,
   answerSubmitting: false,
   cardLoading: false,
   studyTimerStartedAt: 0,
@@ -51,7 +49,6 @@ const heroCard = document.querySelector("#heroCard");
 const progressPanel = document.querySelector("#progressPanel");
 const focusWordsPanel = document.querySelector("#focusWordsPanel");
 const parentStats = document.querySelector("#parentStats");
-const parentInputPanel = document.querySelector("#parentInputPanel");
 const goalPanel = document.querySelector("#goalPanel");
 const mistakePanel = document.querySelector("#mistakePanel");
 const wordProgressPanel = document.querySelector("#wordProgressPanel");
@@ -378,7 +375,8 @@ function renderHero() {
           </div>
           <div class="hero-metric">
             <div class="metric-label">今天进度</div>
-            <div class="hero-metric-value">${today.minutes}/${plan.targetMinutes} 分钟</div>
+            <div class="hero-metric-value">${today.recognizeCards}/${plan.dailyTargets.recognize} 认</div>
+            <div class="word-meta">听 ${today.listenCards}/${plan.dailyTargets.listen} · 拼 ${today.spellCards}/${plan.dailyTargets.spell}</div>
           </div>
           <div class="hero-metric">
             <div class="metric-label">已掌握词数</div>
@@ -536,7 +534,7 @@ function renderFocusWords() {
 }
 
 function renderParentDashboard() {
-  const { progress, today, parentMessage, cumulative } = state.overview;
+  const { progress, today, cumulative } = state.overview;
   const todayMinutes = formatMinutesValue(today.minutes);
   const cumulativeMinutes = formatMinutesValue(
     cumulative.totalMinutes,
@@ -547,7 +545,7 @@ function renderParentDashboard() {
     buildMetricCard("学习时长", `${todayMinutes} / ${cumulativeMinutes} 分钟`, `今日 / 累计，今天完成 ${today.cards} 次答题`),
     buildMetricCard("累计答题次数", `${cumulative.totalAttempts} 次`, `累计学过 ${cumulative.studiedWords} 个词`),
     buildMetricCard("累计掌握词数", `${cumulative.masteredWords} 个`, `总词库 ${progress.totalWords} 个`),
-    buildMetricCard("今日正确率", `${today.correctRate}%`, `包含近似拼写的容错`),
+    buildMetricCard("今日正确率", `${today.correctRate}%`, `答错就按错误计算`),
     buildMetricCard("全部词库进度", `${progress.coreMastered}/${progress.coreGoalCount}`, `还差 ${progress.coreGap} 个`),
     buildMetricCard(
       "考试前预计完成",
@@ -599,7 +597,7 @@ function renderParentDashboard() {
         <div class="bar"><div class="bar-fill" style="width:${formatPercent(progress.spellMastered, progress.spellGoalCount)}"></div></div>
       </div>
     </div>
-    <p class="muted">${parentMessage}</p>
+    <p class="muted">这里展示 KET 官方词库的整体掌握进度。</p>
     <p class="muted">认词和听词按全部词库统计；拼写只统计当前需要进入默写训练的词。</p>
   `;
 
@@ -625,52 +623,6 @@ function renderParentDashboard() {
           </div>`
     }
   `;
-}
-
-function renderParentInputPanel() {
-  const feedback = state.parentAddFeedback;
-  const feedbackMarkup = feedback
-    ? `
-      <div class="parent-add-feedback ${feedback.type === "error" ? "error" : feedback.type === "success" ? "success" : ""}">
-        ${escapeHtml(feedback.message)}
-      </div>
-    `
-    : "";
-
-  parentInputPanel.innerHTML = `
-    <div class="parent-add-header">
-      <div>
-        <h2>家长补充词</h2>
-        <div class="muted">把真题、阅读或听力里临时遇到的陌生词加进来，系统会优先安排到后面的学习里。</div>
-      </div>
-      <div class="parent-add-note">新补充的词默认按重点词处理，会进入认词、听词和默写流程。</div>
-    </div>
-    <form class="parent-add-form" id="parentAddForm">
-      <div class="parent-add-grid">
-        <input
-          class="parent-add-input"
-          id="parentWordTerm"
-          placeholder="英文单词或词组，例如 yoghurt"
-          autocomplete="off"
-        />
-        <input
-          class="parent-add-input"
-          id="parentWordMeaning"
-          placeholder="中文释义（可选）"
-          autocomplete="off"
-        />
-      </div>
-      <div class="parent-add-actions">
-        <button class="primary-btn" type="submit" ${state.parentAddSubmitting ? "disabled" : ""}>
-          ${state.parentAddSubmitting ? "正在加入..." : "加入学习词库"}
-        </button>
-        <div class="muted">如果词库里已经有这个词，就会直接加入优先学习队列。</div>
-      </div>
-    </form>
-    ${feedbackMarkup}
-  `;
-
-  parentInputPanel.querySelector("#parentAddForm").addEventListener("submit", submitParentWord);
 }
 
 function renderParentWordPanel() {
@@ -719,7 +671,6 @@ function renderParentWordPanel() {
                       <div class="word-cell-main">
                         <strong>${escapeHtml(item.term)}</strong>
                         <div class="word-meta">${escapeHtml(item.meaning || "中文会在学习时逐步补全")}</div>
-                        ${item.parentAdded ? `<div class="word-flag">家长补充</div>` : ""}
                       </div>
                       <div>${escapeHtml(item.priority)}</div>
                       <div>
@@ -753,14 +704,19 @@ function renderStudyPlanMini() {
   }
 
   const today = getStudyDisplayToday();
+  const targets = state.overview.plan?.dailyTargets || {
+    recognize: 30,
+    listen: 20,
+    spell: 15,
+  };
 
   studyPlanMini.className = "study-plan-mini";
   studyPlanMini.innerHTML = `
     <div class="mini-line timer-line"><strong>${state.studyElapsedSeconds}</strong> 秒学习</div>
     <div class="mini-line"><strong>${numberValue(today.cards)}</strong> 次回答</div>
-    <div class="mini-line"><strong>${numberValue(today.recognizeCards)}</strong> 次认词</div>
-    <div class="mini-line"><strong>${numberValue(today.listenCards)}</strong> 次听词</div>
-    <div class="mini-line"><strong>${numberValue(today.spellCards)}</strong> 次拼词</div>
+    <div class="mini-line"><strong>${numberValue(today.recognizeCards)}/${targets.recognize}</strong> 认词</div>
+    <div class="mini-line"><strong>${numberValue(today.listenCards)}/${targets.listen}</strong> 听词</div>
+    <div class="mini-line"><strong>${numberValue(today.spellCards)}/${targets.spell}</strong> 拼写</div>
   `;
 }
 
@@ -828,7 +784,7 @@ function playResultSound(result) {
   }
 
   const now = context.currentTime;
-  const isCorrect = result === "correct" || result === "almost";
+  const isCorrect = result === "correct";
   const notes = isCorrect
     ? [
         { frequency: 660, start: 0, duration: 0.14, volume: 0.3 },
@@ -1217,14 +1173,12 @@ async function submitAnswer({ gaveUp = false } = {}) {
   if (result.evaluation.result === "correct") {
     feedbackArea.innerHTML = "";
   } else {
-    const cssClass =
-      result.evaluation.result === "almost" ? "feedback almost" : "feedback wrong";
     const phoneticMarkup = state.currentCard.phonetic
       ? `<span class="answer-phonetic">${escapeHtml(state.currentCard.phonetic)}</span>`
       : "";
 
     feedbackArea.innerHTML = `
-      <div class="${cssClass}">
+      <div class="feedback wrong">
         <div class="answer-reveal">
           <div class="answer-word">${escapeHtml(state.currentCard.term)}</div>
           <div class="answer-meta">
@@ -1320,63 +1274,6 @@ async function ensureParentWords(force = false) {
   }
 }
 
-async function submitParentWord(event) {
-  event.preventDefault();
-
-  const termInput = parentInputPanel.querySelector("#parentWordTerm");
-  const meaningInput = parentInputPanel.querySelector("#parentWordMeaning");
-  const term = termInput.value.trim();
-  const meaning = meaningInput.value.trim();
-
-  if (!term) {
-    state.parentAddFeedback = {
-      type: "error",
-      message: "先输入要补充的英文单词或词组。",
-    };
-    renderParentInputPanel();
-    return;
-  }
-
-  state.parentAddSubmitting = true;
-  state.parentAddFeedback = {
-    type: "info",
-    message: "正在加入词库，并补齐本地释义和发音缓存…",
-  };
-  renderParentInputPanel();
-
-  try {
-    const payload = await requestJson("/api/parent/words", {
-      method: "POST",
-      body: JSON.stringify({
-        term,
-        meaning,
-      }),
-    });
-
-    state.overview = payload.overview;
-    state.parentWordsNeedRefresh = true;
-    state.parentAddFeedback = {
-      type: "success",
-      message:
-        payload.action === "created"
-          ? `已加入 ${payload.word.term}，后面会优先安排学习。`
-          : `词库里已有 ${payload.word.term}，已经加入优先学习队列。`,
-    };
-
-    renderOverview();
-    await ensureParentWords(true);
-  } catch (error) {
-    state.parentAddFeedback = {
-      type: "error",
-      message: "加入失败了，请稍后再试。",
-    };
-    renderParentInputPanel();
-  } finally {
-    state.parentAddSubmitting = false;
-    renderParentInputPanel();
-  }
-}
-
 function renderOverview() {
   if (!state.overview) {
     return;
@@ -1386,7 +1283,6 @@ function renderOverview() {
   renderProgress();
   renderFocusWords();
   renderParentDashboard();
-  renderParentInputPanel();
   renderStudyPlanMini();
 
   if (views.parent.classList.contains("active")) {
