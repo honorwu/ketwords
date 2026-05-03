@@ -1143,6 +1143,14 @@ async function submitAnswer({ gaveUp = false } = {}) {
     return;
   }
 
+  if (state.currentCard.mode === "spell" && !gaveUp) {
+    const card = state.currentCard;
+    const maxLen = card.baseTerm.replace(/[^a-zA-Z-]/g, "").length;
+    if (state.spellInputValue.length < maxLen) {
+      return;
+    }
+  }
+
   state.answerSubmitting = true;
   setAnswerControlsDisabled(true);
   ensureResultAudioContext();
