@@ -870,7 +870,7 @@ function renderSpellUnderlines() {
   if (!container) return;
 
   const card = state.currentCard;
-  const maxLen = card.baseTerm.replace(/[^a-zA-Z-]/g, "").length;
+  const maxLen = getSpellInputLength(card);
   container.innerHTML = Array.from({ length: maxLen }, (_, i) => {
     const char = state.spellInputValue[i] || "";
     return `<span class="spell-char" data-index="${i}">${char}</span>`;
@@ -887,7 +887,7 @@ function handleSpellKeydown(event) {
   if (state.answerSubmitting) return;
 
   const card = state.currentCard;
-  const maxLen = card.baseTerm.replace(/[^a-zA-Z-]/g, "").length;
+  const maxLen = getSpellInputLength(card);
 
   if (event.key === "Enter") {
     event.preventDefault();
@@ -923,6 +923,10 @@ function focusSpellInput() {
   // no-op, spell uses keyboard now
 }
 
+function getSpellInputLength(card) {
+  return card.baseTerm.replace(/[^a-zA-Z-]/g, "").length;
+}
+
 function renderCard(card) {
   state.selectedChoiceId = null;
   state.feedback = null;
@@ -936,19 +940,22 @@ function renderCard(card) {
       : card.mode === "spell"
         ? card.chineseMeaning
         : card.term;
+  const priorityClass = String(card.priority || "B")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "");
 
   const phoneticLine =
     card.mode === "spell"
       ? ""
-      : `<div class="phonetic">${card.phonetic || "首次学习时会自动补发音信息"}</div>`;
+      : `<div class="phonetic">${escapeHtml(card.phonetic || "首次学习时会自动补发音信息")}</div>`;
 
   const exampleLine =
     card.example && card.mode === "recognize"
-      ? `<div class="hint-box">例句：${card.example}</div>`
+      ? `<div class="hint-box">例句：${escapeHtml(card.example)}</div>`
       : "";
   const flowNote =
     card.flowNote
-      ? `<div class="hint-box soft">${card.flowNote}</div>`
+      ? `<div class="hint-box soft">${escapeHtml(card.flowNote)}</div>`
       : "";
   const modeTip =
     card.mode === "spell"
@@ -959,7 +966,7 @@ function renderCard(card) {
   const modeTipMarkup = modeTip
     ? `
         <div class="mode-tip">
-          ${modeTip}
+          ${escapeHtml(modeTip)}
         </div>
       `
     : "";
@@ -981,8 +988,8 @@ function renderCard(card) {
           ${card.options
             .map(
               (option) => `
-                <button class="option-btn" data-choice="${option.wordId}">
-                  ${option.label}
+                <button class="option-btn" data-choice="${Number(option.wordId)}">
+                  ${escapeHtml(option.label)}
                 </button>
               `
             )
@@ -1000,12 +1007,12 @@ function renderCard(card) {
       <div class="card-top">
         <div>
           <div class="badge-row">
-            <span class="badge priority-${card.priority.toLowerCase()}">${priorityLabel(card.priority)}</span>
-            <span class="badge priority-b">${card.theme}</span>
+            <span class="badge priority-${priorityClass}">${escapeHtml(priorityLabel(card.priority))}</span>
+            <span class="badge priority-b">${escapeHtml(card.theme)}</span>
             <span class="badge priority-c">${formatPartOfSpeechLabel(card.partOfSpeech)}</span>
-            <span class="badge priority-c">${card.prompt}</span>
+            <span class="badge priority-c">${escapeHtml(card.prompt)}</span>
           </div>
-          <div class="prompt-title">${promptTitle}</div>
+          <div class="prompt-title">${escapeHtml(promptTitle)}</div>
           ${phoneticLine}
         </div>
         ${modeTipMarkup}
@@ -1145,7 +1152,7 @@ async function submitAnswer({ gaveUp = false } = {}) {
 
   if (state.currentCard.mode === "spell" && !gaveUp) {
     const card = state.currentCard;
-    const maxLen = card.baseTerm.replace(/[^a-zA-Z-]/g, "").length;
+    const maxLen = getSpellInputLength(card);
     if (state.spellInputValue.length < maxLen) {
       return;
     }

@@ -1,109 +1,57 @@
 # 部署文档
 
-这份文档按当前代码整理，目标是让这个项目在一台普通 Linux 机器上稳定跑起来，并且后续便于更新、备份和迁移。
+这份项目目前使用两个 SQLite 数据库：
 
-## 1. 部署前先确认
+- `data/wordbank.sqlite`：词库，只保存可随代码发布的基线数据。
+- `data/learning.sqlite`：学习记录，不提交仓库，必须在生产环境持久化和备份。
 
-### 运行要求
+旧的 `data/ketwords.sqlite` 已废弃，不再需要部署或备份。
 
-- 建议 Node.js 22 LTS 或更高
-- 需要 npm
-- 建议使用 Linux + `systemd` 管理进程
-- 如果首次要生成完整离线缓存，部署机器需要能访问外网
+## 运行要求
 
-### 代码当前特性
+- Node.js 22 LTS 或更高版本。
+- npm。
+- 推荐 Linux + systemd 管理进程。
+- 如果要运行 `npm run cache:offline` 刷新离线资源，部署机需要能访问外网。
 
-- 服务端是原生 Node.js HTTP 服务，没有使用 Express
-- 默认端口是 `3210`，可通过 `PORT` 环境变量覆盖
-- 前端静态资源由同一个 Node 服务直接提供
-- 学习端和 `/admin` 都有简单密码登录
-- 服务启动后会每天自动备份 `data/ketwords.sqlite`
-- 当前仓库已经提交了一份离线基线资源，可直接用于首发部署
-
-部署建议：
-
-- 公网部署时仍建议使用 HTTPS，并在 Nginx / Caddy / Traefik 层保留限流或 IP 白名单等额外保护
-
-## 2. 目录与持久化文件
-
-部署时最需要关注的是下面这些文件：
-
-- `data/a2-key-wordlist.json`
-  词表快照，已提交到仓库，启动时优先使用
-- `data/ketwords.sqlite`
-  已提交的主数据库基线。部署后它会继续写入学习记录和词条元数据
-- `data/study-config.json`
-  本地学习配置
-- `data/auth-config.json`
-  登录密码哈希和 session 签名密钥；如果没有用环境变量指定，服务首次启动会自动生成
-- `data/backups/`
-  自动每日备份目录
-- `public/audio/`
-  已提交的本地音频缓存
-- `public/assets/fonts/`
-  已提交的本地字体缓存
-- `public/fonts.css`
-  已提交的离线字体样式文件
-
-如果是从当前仓库直接部署，上述离线基线资源默认已经存在；只要 `npm ci` 后启动即可使用。
-
-## 3. 快速部署
-
-假设部署目录为 `/srv/ketwords`。
-
-### 3.1 拉取代码
+## 首次部署
 
 ```bash
 mkdir -p /srv
 cd /srv
 git clone <你的仓库地址> ketwords
 cd /srv/ketwords
-```
-
-### 3.2 安装依赖
-
-```bash
 npm ci
-```
-
-### 3.3 按需刷新离线缓存
-
-通常首发部署可以直接跳过。  
-如果你想重新抓取或补齐缓存，再执行：
-
-```bash
-npm run cache:offline
-```
-
-这一步会把字体、音标、中文释义和音频尽量补齐，并更新本地数据库与静态资源。
-
-### 3.4 启动服务
-
-```bash
 PORT=3210 npm start
 ```
 
-看到类似下面的日志说明启动成功：
+启动后访问：
 
 ```text
-KET words server running at http://localhost:3210
+http://localhost:3210/
+http://localhost:3210/admin
 ```
 
-### 3.5 健康检查
+健康检查：
 
 ```bash
 curl http://127.0.0.1:3210/api/health
 ```
 
-预期返回：
+## 持久化文件
 
-```json
-{"ok":true}
-```
+生产环境必须保留：
 
-## 4. 推荐上线方式：systemd + Nginx
+- `data/learning.sqlite`
+- `data/learning.sqlite-wal`
+- `data/learning.sqlite-shm`
+- `data/auth-config.json`，如果没有使用环境变量配置密码和 session 密钥
+- `data/study-config.json`，如果改过默写等级配置
+- `data/backups/`
 
-### 4.1 创建 systemd 服务
+`data/learning.sqlite` 如果首次不存在，服务会自动创建空库；已有线上库不会被覆盖。
+
+## systemd 示例
 
 新建 `/etc/systemd/system/ketwords.service`：
 
@@ -128,7 +76,7 @@ RestartSec=3
 WantedBy=multi-user.target
 ```
 
-然后执行：
+启用服务：
 
 ```bash
 sudo systemctl daemon-reload
@@ -144,9 +92,7 @@ sudo systemctl stop ketwords
 sudo journalctl -u ketwords -f
 ```
 
-### 4.2 Nginx 反向代理
-
-新建站点配置，例如 `/etc/nginx/conf.d/ketwords.conf`：
+## Nginx 反向代理示例
 
 ```nginx
 server {
@@ -164,157 +110,57 @@ server {
 }
 ```
 
-检查并重载：
+公网部署建议使用 HTTPS，并在反向代理层增加限流、Basic Auth、IP 白名单或 VPN 访问限制。
 
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
-```
+## 更新流程
 
-如果要限制家长看板或整站访问，建议在 Nginx 层加认证，而不是直接暴露：
-
-- Basic Auth
-- 仅允许内网 IP
-- 仅通过 VPN 访问
-
-## 5. 离线部署 / 受限网络部署
-
-如果目标机器不能访问 Google、词典接口或在线发音源，建议先在一台能联网的机器上“预热”资源，再整体拷过去。
-
-### 5.1 在联网机器上执行
-
-```bash
-npm ci
-npm run cache:offline
-```
-
-### 5.2 复制这些文件到目标机器
-
-- `data/ketwords.sqlite`
-- `data/study-config.json`
-- `public/audio/`
-- `public/assets/fonts/`
-- `public/fonts.css`
-
-如果你直接使用当前仓库里的已提交离线资源，这一步通常不需要额外做；这里更适合“你重新刷新过缓存，想把新缓存整体搬到另一台机器”的场景。
-
-## 6. 更新流程
-
-建议每次更新都按下面顺序做：
-
-### 6.1 备份数据
-
-先停服务：
+更新代码前先备份学习库：
 
 ```bash
 sudo systemctl stop ketwords
-```
-
-备份关键文件：
-
-```bash
-cp data/ketwords.sqlite data/ketwords.sqlite.bak
-cp data/study-config.json data/study-config.json.bak 2>/dev/null || true
-```
-
-如果你很在意离线缓存，也可以一起备份：
-
-```bash
-tar -czf ketwords-offline-cache.tgz public/audio public/assets/fonts public/fonts.css
-```
-
-### 6.2 更新代码与依赖
-
-```bash
+cp data/learning.sqlite data/learning.sqlite.bak
+cp data/learning.sqlite-wal data/learning.sqlite-wal.bak 2>/dev/null || true
+cp data/learning.sqlite-shm data/learning.sqlite-shm.bak 2>/dev/null || true
 git pull
 npm ci
-```
-
-### 6.3 按需刷新缓存
-
-以下情况建议重新执行一次：
-
-- 词表有变化
-- 需要补充更多音频 / 释义 / 音标
-- 新服务器需要本地离线资源
-
-命令：
-
-```bash
-npm run cache:offline
-```
-
-### 6.4 启动服务
-
-```bash
 sudo systemctl start ketwords
-sudo systemctl status ketwords
 ```
 
-## 7. 备份与恢复
+如果更新包含词库或离线资源变化，确认 `data/wordbank.sqlite`、`public/audio/`、`public/assets/fonts/` 和 `public/fonts.css` 已随代码同步。
 
-服务启动后会自动执行一次当天备份，之后每小时检查一次：如果当天还没有备份，就复制一份到 `data/backups/ketwords-YYYY-MM-DD.sqlite`。默认保留最近 30 天，可通过 `KET_BACKUP_RETENTION_DAYS` 调整；如果要关闭自动备份，可设置 `KET_AUTO_BACKUP=0`。
+## 离线资源刷新
 
-### 7.1 最小备份集
-
-至少备份：
-
-- `data/ketwords.sqlite`
-- `data/study-config.json`
-- `data/auth-config.json`（如果没有用环境变量配置密码）
-
-### 7.2 完整备份集
-
-如果希望恢复后保持完全一致的离线体验，再加上：
-
-- `public/audio/`
-- `public/assets/fonts/`
-- `public/fonts.css`
-
-### 7.3 恢复步骤
-
-1. 停服务
-2. 把备份文件覆盖回原位置
-3. 启动服务
-4. 访问 `/api/health` 验证
-
-## 8. 常见问题
-
-### 启动时报 `ERR_UNKNOWN_BUILTIN_MODULE: node:sqlite`
-
-Node 版本太低。升级到支持 `node:sqlite` 的版本，建议直接使用 Node.js 22 LTS 或更高。
-
-### 页面能打开，但中文释义 / 音标 / 音频很多是空的
-
-这是典型的“新部署但还没预热缓存”场景。执行：
+通常不需要在生产环境运行。需要重新补齐中文释义、音标、音频或字体时执行：
 
 ```bash
 npm run cache:offline
 ```
 
-### 忘记登录密码
+该命令会更新 `data/wordbank.sqlite` 和静态离线资源，不应该写入 `data/learning.sqlite`。
 
-如果使用环境变量配置，请查看 systemd 或部署平台里的环境变量。如果使用本地配置，`data/auth-config.json` 里只保存哈希，不能反查原密码，需要重新生成密码哈希或改用环境变量后重启服务。
+## 备份
 
-### 重启后学习进度丢了
+服务启动后会每天自动备份到 `data/backups/`。备份内容包括：
 
-通常是 `data/ketwords.sqlite` 没有持久化、被覆盖，或者部署脚本误删了数据库文件。
+- 当天的 `learning.sqlite` 快照。
+- 同名的 `-wal`、`-shm` 文件，如果存在。
+- 对应的 `-wordbank.sqlite` 词库快照。
 
-### 更新后端口不通
+默认保留 30 天，可用环境变量调整：
 
-优先检查：
+```bash
+KET_BACKUP_RETENTION_DAYS=60
+```
 
-- `systemctl status ketwords`
-- `journalctl -u ketwords -f`
-- `curl http://127.0.0.1:3210/api/health`
-- Nginx 配置和防火墙规则
+如果你已有外部备份系统，也可以关闭应用内自动备份：
 
-## 9. 部署后的核对清单
+```bash
+KET_AUTO_BACKUP=0
+```
 
-- 服务已经启动：`systemctl status ketwords`
-- 健康检查正常：`/api/health`
-- 首页可访问：`/`
-- 家长看板可访问：`/admin`
-- 数据目录可写：`data/`
-- 学习记录能落库：`data/ketwords.sqlite`
-- 如需完整离线体验，离线缓存已经生成
+## 故障排查
+
+- 启动失败并提示缺少 `wordbank.sqlite`：说明词库基线没有部署到 `data/wordbank.sqlite`。
+- 学习记录丢失：通常是 `data/learning.sqlite` 没有持久化、被覆盖或部署脚本误删。
+- 登录失效：检查 `KET_SESSION_SECRET` 是否变更，或 `data/auth-config.json` 是否被重新生成。
+- 音频缺失：确认 `public/audio/` 已部署；缺失时浏览器会回退到系统朗读。

@@ -5,8 +5,6 @@
 node_modules/
 
 # runtime database sidecars and local config
-data/ketwords.sqlite-shm
-data/ketwords.sqlite-wal
 data/learning.sqlite
 data/learning.sqlite-shm
 data/learning.sqlite-wal

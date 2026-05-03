@@ -1,46 +1,33 @@
 # KET 单词冲刺
 
-给单个孩子使用的本地 `A2 Key for Schools` 单词学习网站。后端是原生 Node.js HTTP 服务，前端是单页应用，学习进度保存在本地 SQLite。
+给孩子使用的本地 `A2 Key for Schools` 单词学习网站。后端是原生 Node.js HTTP 服务，前端是单页应用，数据使用 SQLite 保存。
 
-当前仓库已经带了一份可直接部署的离线基线资源，包括：
+## 当前数据结构
 
-- `data/ketwords.sqlite` 中的词条元数据、中文解释、已有音标和本地音频索引
-- `public/audio/` 中的本地发音缓存
-- `public/assets/fonts/` 和 `public/fonts.css` 中的离线字体资源
+- `data/wordbank.sqlite`：词库基线，随仓库提交，保存词条、中文解释、音标和本地音频索引。
+- `data/learning.sqlite`：学习记录库，不提交到仓库，保存进度、答题记录和家长补词队列。服务启动时如果不存在会自动创建空库；线上部署时必须持久化保护。
+- `data/auth-config.json`：本地生成的登录密码哈希和 session 密钥，不提交到仓库。
+- `data/study-config.json`：本地学习配置，不提交到仓库。
+- `data/backups/`：自动每日备份目录，不提交到仓库。
+- `public/audio/`、`public/assets/fonts/`、`public/fonts.css`：离线音频和字体资源，随仓库提交。
 
-## 当前功能
+旧的 `data/ketwords.sqlite` 已经废弃，不再参与运行。
 
-- 基于 `A2 Key for Schools` 词表生成学习库
-- 按认词、听词、拼写三种模式自动安排学习节奏
-- 首页展示考试倒计时、今日学习计划和打卡情况
-- 家长看板展示累计进度、错词、预计完成度和词条明细
-- 支持家长手动补充陌生词，并优先加入学习队列
-- 支持 typo 容错、英式 / 美式变体、错题回炉和间隔复习
-- 学习端和家长端带简单密码登录，避免公网裸露数据接口
-- 启动后会按天自动备份 SQLite 学习数据
-- 可选离线缓存中文释义、音标、音频和字体，减少对外网的依赖
+## 功能
 
-## 页面与路由
+- 按认词、听词、拼写三种模式安排学习节奏。
+- 首页显示考试倒计时、今日计划、打卡和进度。
+- 家长看板显示累计进度、错词、预计完成度和词条明细。
+- 支持家长补词，并优先加入学习队列。
+- 支持拼写近似容错、英式/美式变体、错题回炉和间隔复习。
+- 学习端和家长端有简单密码登录，避免接口裸露。
+- 启动后按天自动备份学习库和词库快照。
 
-- `/`：孩子端首页 + 学习页
-- `/admin`：家长看板
-- `/api/overview`：总览数据
-- `/api/study/next`：下一张学习卡片
-- `/api/study/answer`：提交答案
-- `/api/parent/words`：查询 / 新增家长补词
-- `/api/health`：健康检查
+## 运行要求
 
-说明：
-
-- `/admin` 不是单独的 HTML 文件，而是同一个前端入口根据路径切换到家长模式
-- `/` 和 `/admin` 使用不同密码；家长密码也可以访问学习端
-
-## 运行环境
-
-- 建议 Node.js 22 LTS 或更高
-  说明：代码使用了 `node:sqlite`、原生 `fetch` 和 `AbortSignal.timeout`
-- npm
-- 如果要首次生成离线缓存，部署机器需要能访问外网
+- Node.js 22 LTS 或更高版本。
+- npm。
+- 如果要重新生成离线缓存，机器需要能访问外网。
 
 ## 快速启动
 
@@ -49,7 +36,7 @@ npm ci
 npm start
 ```
 
-默认监听 `3210` 端口，也可以通过环境变量覆盖：
+默认监听 `3210` 端口，也可以覆盖：
 
 ```bash
 PORT=4321 npm start
@@ -60,64 +47,23 @@ PORT=4321 npm start
 - [http://localhost:3210/](http://localhost:3210/)
 - [http://localhost:3210/admin](http://localhost:3210/admin)
 
-## 首次初始化建议
-
-仓库当前已经提交了一份可直接运行的离线基线资源，首次部署通常不需要先跑缓存脚本。  
-如果你想重新拉取或补齐最新的中文释义、音标、本地音频和字体缓存，再执行：
-
-```bash
-npm run cache:offline
-```
-
-这一步会：
-
-- 下载并缓存字体到 `public/assets/fonts/`
-- 生成 `public/fonts.css`
-- 为词库补充中文释义、音标和本地音频缓存
-- 把对应元数据写入 `data/ketwords.sqlite`
-
-如果不执行这一步，服务仍然可以启动，但首次部署出来的体验会更“轻量”：
-
-- 词库依然可用
-- 部分中文释义、音标和音频可能为空
-- 音频缺失时会退回浏览器朗读
-
-## 数据文件说明
-
-- `data/a2-key-wordlist.json`
-  已提交到仓库的词表快照。启动时优先使用它，不依赖 PDF。
-- `data/a2-key-vocabulary-list.pdf`
-  可选的原始词表 PDF，仅在你想重新解析并生成词表快照时才需要。
-- `data/ketwords.sqlite`
-  已提交的部署基线数据库。启动后它也会继续保存词条元数据、学习进度、答题记录和家长补词结果。
-- `data/study-config.json`
-  本地学习配置。默认只有 `S` 级进入默写训练。
-- `data/auth-config.json`
-  本地生成的登录密码哈希和会话签名密钥。它不会提交到仓库；生产环境建议改用环境变量配置。
-- `data/backups/`
-  自动生成的每日 SQLite 备份目录。
-- `public/audio/`
-  已提交的本地音频缓存目录。
-- `public/assets/fonts/` 和 `public/fonts.css`
-  已提交的离线字体缓存。
-
 ## 常用命令
 
 ```bash
 npm run dev
-npm run start
+npm start
 npm run build:wordlist
 npm run cache:offline
 ```
 
-- `npm run dev`：监听模式启动服务
-- `npm start`：普通启动
-- `npm run build:wordlist`：根据本地词表文件生成 / 刷新 `data/a2-key-wordlist.json`
-- `npm run cache:offline`：补齐离线资源缓存
+- `npm run dev`：监听模式启动服务。
+- `npm start`：普通启动。
+- `npm run build:wordlist`：根据本地词表文件生成或刷新词表快照。
+- `npm run cache:offline`：补齐中文释义、音标、音频和字体缓存，并写入 `data/wordbank.sqlite`。
 
-## 配置说明
+## 登录配置
 
-登录密码可用环境变量指定：
+可用环境变量指定登录密码：
 
 ```bash
 KET_STUDY_PASSWORD=孩子端密码
@@ -145,12 +91,12 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 
 这不会清空已有学习进度。
 
+## 版本管理建议
+
+- 建议提交：源码、`package-lock.json`、`data/wordbank.sqlite`、`public/audio/`、`public/assets/fonts/`、`public/fonts.css`。
+- 建议忽略：`node_modules/`、`tmp/`、`data/learning.sqlite*`、`data/wordbank.sqlite-shm`、`data/wordbank.sqlite-wal`、`data/study-config.json`、`data/auth-config.json`、`data/backups/`。
+- `data/a2-key-vocabulary-list.pdf` 和 `tmp/official-materials/` 这类官方材料请先确认版权和分发范围。
+
 ## 部署
 
 详细部署步骤见 [docs/deployment.md](./docs/deployment.md)。
-
-## 版本管理建议
-
-- 建议提交源码、`package-lock.json`、`data/a2-key-wordlist.json`、`data/ketwords.sqlite`、`public/audio/`、`public/assets/fonts/`、`public/fonts.css`
-- 建议忽略 `node_modules/`、`tmp/`、`data/ketwords.sqlite-shm`、`data/ketwords.sqlite-wal`、`data/study-config.json`
-- 如果后续要推到远端仓库，`data/a2-key-vocabulary-list.pdf` 和 `tmp/official-materials/` 这类官方材料请先确认版权和分发范围
