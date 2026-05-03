@@ -1123,6 +1123,8 @@ function markChoiceResult({ selectedChoiceId, correctWordId, gaveUp }) {
     return;
   }
 
+  const answeredCorrectly = !gaveUp && Number(selectedChoiceId) === Number(correctWordId);
+
   studyPanel.querySelectorAll(".option-btn").forEach((button) => {
     const choiceId = Number(button.dataset.choice);
     const isCorrect = choiceId === Number(correctWordId);
@@ -1132,7 +1134,7 @@ function markChoiceResult({ selectedChoiceId, correctWordId, gaveUp }) {
     button.classList.toggle("correct-answer", isCorrect);
     button.classList.toggle("wrong-answer", isSelected && !isCorrect && !gaveUp);
 
-    if (isCorrect || (isSelected && !isCorrect && !gaveUp)) {
+    if (!answeredCorrectly && (isCorrect || (isSelected && !isCorrect && !gaveUp))) {
       const marker = document.createElement("span");
       marker.className = "answer-marker";
       marker.textContent = isCorrect ? "正确答案" : "你的答案";
@@ -1212,26 +1214,28 @@ async function submitAnswer({ gaveUp = false } = {}) {
   });
 
   const feedbackArea = studyPanel.querySelector("#feedbackArea");
-  const cssClass =
-    result.evaluation.result === "wrong"
-      ? "feedback wrong"
-      : result.evaluation.result === "almost"
-        ? "feedback almost"
-        : "feedback";
+  if (result.evaluation.result === "correct") {
+    feedbackArea.innerHTML = "";
+  } else {
+    const cssClass =
+      result.evaluation.result === "almost" ? "feedback almost" : "feedback wrong";
+    const phoneticMarkup = state.currentCard.phonetic
+      ? `<span class="answer-phonetic">${escapeHtml(state.currentCard.phonetic)}</span>`
+      : "";
 
-  feedbackArea.innerHTML = `
-    <div class="${cssClass}">
-      <strong>${
-        result.evaluation.result === "correct"
-          ? "答对了"
-          : result.evaluation.result === "almost"
-            ? "很接近"
-            : "答错了，正确答案看这里"
-      }</strong>
-      <p>${result.evaluation.note}</p>
-      <p>当前状态：${result.masteryLabel}</p>
-    </div>
-  `;
+    feedbackArea.innerHTML = `
+      <div class="${cssClass}">
+        <div class="answer-reveal">
+          <div class="answer-word">${escapeHtml(state.currentCard.term)}</div>
+          <div class="answer-meta">
+            <span>${escapeHtml(formatPartOfSpeechLabel(state.currentCard.partOfSpeech))}</span>
+            ${phoneticMarkup}
+          </div>
+          <div class="answer-meaning">${escapeHtml(state.currentCard.chineseMeaning || result.evaluation.acceptedText || "")}</div>
+        </div>
+      </div>
+    `;
+  }
 
   if (state.currentCard.mode === "spell" && result.evaluation.result === "wrong") {
     const acceptedText = (result.evaluation.acceptedText || state.currentCard.baseTerm).replace(/[^a-zA-Z-]/g, "");

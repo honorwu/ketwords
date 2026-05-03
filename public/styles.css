@@ -777,6 +777,43 @@ input {
   background: rgba(255, 212, 105, 0.16);
 }
 
+.answer-reveal {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+.answer-word {
+  color: #4a1e1e;
+  font-family: "Baloo 2", "Nunito", system-ui, sans-serif;
+  font-size: clamp(2.4rem, 8vw, 4.8rem);
+  font-weight: 800;
+  line-height: 0.95;
+}
+
+.answer-meta {
+  align-items: center;
+  color: #7a3a3a;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 1.1rem;
+  font-weight: 800;
+  gap: 8px 12px;
+  justify-content: center;
+}
+
+.answer-phonetic {
+  color: #9b5656;
+  font-weight: 700;
+}
+
+.answer-meaning {
+  color: #842626;
+  font-size: clamp(1.4rem, 4vw, 2.2rem);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
 .submit-btn.next-ready {
   background: linear-gradient(135deg, var(--teal), #72c9b8);
   box-shadow: 0 14px 32px rgba(79, 176, 163, 0.24);
