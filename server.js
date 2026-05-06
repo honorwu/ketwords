@@ -228,7 +228,8 @@ async function handleApi(request, response, url) {
       return;
     }
 
-    const offset = Number(url.searchParams.get("offset") || "0");
+    const requestedOffset = Number(url.searchParams.get("offset") || "0");
+    const offset = Number.isFinite(requestedOffset) ? requestedOffset : 0;
     sendJson(response, 200, store.getDailyActivity(120, offset));
     return;
   }

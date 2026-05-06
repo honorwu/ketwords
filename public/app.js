@@ -443,8 +443,23 @@ function renderHero() {
   });
 }
 
+function setOverview(overview) {
+  state.overview = overview;
+  state.checkinCache = {
+    0: overview.checkin,
+  };
+}
+
 async function loadCheckinMonth(offset) {
   if (offset === 0) {
+    if (!state.checkinCache[0] && state.overview.checkin?.monthOffset === 0) {
+      state.checkinCache[0] = state.overview.checkin;
+    }
+
+    if (!state.checkinCache[0]) {
+      state.checkinCache[0] = await requestJson("/api/checkin?offset=0");
+    }
+
     state.overview.checkin = state.checkinCache[0];
     renderHero();
     return;
@@ -1157,7 +1172,7 @@ async function submitAnswer({ gaveUp = false } = {}) {
     return;
   }
 
-  state.overview = result.overview;
+  setOverview(result.overview);
   applyLocalStudyAttempt(payload.mode, previousToday);
   state.parentWordsNeedRefresh = true;
   renderOverview();
@@ -1292,7 +1307,7 @@ function renderOverview() {
 
 async function loadAuthenticatedApp() {
   if (state.appLoaded) {
-    state.overview = await requestJson("/api/overview");
+    setOverview(await requestJson("/api/overview"));
     state.studyDisplayStats = null;
     renderOverview();
     return;
@@ -1307,7 +1322,7 @@ async function loadAuthenticatedApp() {
 
   showStudyLoading();
 
-  state.overview = await requestJson("/api/overview");
+  setOverview(await requestJson("/api/overview"));
   state.studyDisplayStats = null;
   renderOverview();
 
