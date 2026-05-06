@@ -851,6 +851,12 @@ input {
   gap: 12px;
 }
 
+.mistake-list {
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .list-item {
   display: flex;
   justify-content: space-between;

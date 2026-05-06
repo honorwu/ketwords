@@ -721,7 +721,8 @@ function renderParentDashboard() {
   parentStats.innerHTML = [
     buildMetricCard("学习时长", `${todayMinutes} / ${cumulativeMinutes} 分钟`, `今日 / 累计，今天完成 ${today.cards} 次答题`),
     buildMetricCard("累计答题次数", `${cumulative.totalAttempts} 次`, `累计学过 ${cumulative.studiedWords} 个词`),
-    buildMetricCard("累计掌握词数", `${cumulative.masteredWords} 个`, `总词库 ${progress.totalWords} 个`),
+    buildMetricCard("已开始学习词数", `${cumulative.studiedWords} 个`, `总词库 ${progress.totalWords} 个`),
+    buildMetricCard("已完全学会", `${progress.overallMastered} 个`, `按当前训练目标，总词库 ${progress.totalWords} 个`),
     buildMetricCard("今日正确率", `${today.correctRate}%`, `答错就按错误计算`),
     buildMetricCard("全部词库进度", `${progress.learningProgressPercent}%`, `已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个阶段`),
     buildMetricCard(
@@ -782,7 +783,7 @@ function renderParentDashboard() {
     ${
       state.overview.hardWords.length === 0
         ? `<p class="muted">目前还没有错词。</p>`
-        : `<div class="list">
+        : `<div class="list mistake-list">
             ${state.overview.hardWords
               .map(
                 (item) => `
