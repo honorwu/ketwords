@@ -490,10 +490,10 @@ function renderProgress() {
     <div class="progress-list">
       <div class="progress-item">
         <div class="progress-top">
-          <strong>全部词库</strong>
-          <span>${progress.overallMastered} / ${progress.totalWords}</span>
+          <strong>整体学习进度</strong>
+          <span>${progress.learningProgressPercent}%</span>
         </div>
-        <div class="bar"><div class="bar-fill orange" style="width:${formatPercent(progress.overallMastered, progress.totalWords)}"></div></div>
+        <div class="bar"><div class="bar-fill orange" style="width:${progress.learningProgressPercent}%"></div></div>
       </div>
       <div class="progress-item">
         <div class="progress-top">
@@ -517,7 +517,7 @@ function renderProgress() {
         <div class="bar"><div class="bar-fill" style="width:${formatPercent(progress.spellMastered, progress.spellGoalCount)}"></div></div>
       </div>
     </div>
-    <p class="muted">总词库一共有 ${progress.totalWords} 个词。认词和听词按全部词库统计；${spellLevels} 级会继续进入默写训练。</p>
+    <p class="muted">总词库一共有 ${progress.totalWords} 个词。已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个学习阶段；认词和听词按全部词库统计，${spellLevels} 级会继续进入默写训练。</p>
   `;
 }
 
@@ -561,7 +561,7 @@ function renderParentDashboard() {
     buildMetricCard("累计答题次数", `${cumulative.totalAttempts} 次`, `累计学过 ${cumulative.studiedWords} 个词`),
     buildMetricCard("累计掌握词数", `${cumulative.masteredWords} 个`, `总词库 ${progress.totalWords} 个`),
     buildMetricCard("今日正确率", `${today.correctRate}%`, `答错就按错误计算`),
-    buildMetricCard("全部词库进度", `${progress.coreMastered}/${progress.coreGoalCount}`, `还差 ${progress.coreGap} 个`),
+    buildMetricCard("全部词库进度", `${progress.learningProgressPercent}%`, `已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个阶段`),
     buildMetricCard(
       "考试前预计完成",
       `${progress.projectedPercent}%`,
@@ -612,15 +612,14 @@ function renderParentDashboard() {
         <div class="bar"><div class="bar-fill" style="width:${formatPercent(progress.spellMastered, progress.spellGoalCount)}"></div></div>
       </div>
     </div>
-    <p class="muted">这里展示 KET 官方词库的整体掌握进度。</p>
-    <p class="muted">认词和听词按全部词库统计；拼写只统计当前需要进入默写训练的词。</p>
+    <p class="muted">学习进度按阶段累计：认词、听词都会计入进度；拼写只统计当前需要进入默写训练的词。</p>
   `;
 
   mistakePanel.innerHTML = `
-    <h2>需要多刷几次的词</h2>
+    <h2>全部错词${state.overview.hardWords.length ? `（${state.overview.hardWords.length} 个）` : ""}</h2>
     ${
       state.overview.hardWords.length === 0
-        ? `<p class="muted">目前还没有明显的薄弱词。</p>`
+        ? `<p class="muted">目前还没有错词。</p>`
         : `<div class="list">
             ${state.overview.hardWords
               .map(
@@ -630,7 +629,10 @@ function renderParentDashboard() {
                       <strong>${item.term}</strong>
                       <div class="word-meta">${item.meaning || "释义会在首次学习时自动补全"}</div>
                     </div>
-                    <div>${item.mastery}</div>
+                    <div>
+                      <strong>${item.wrongCount} 次</strong>
+                      <div class="word-meta">${item.mastery}</div>
+                    </div>
                   </div>
                 `
               )
