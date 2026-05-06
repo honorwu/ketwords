@@ -483,7 +483,7 @@ async function loadCheckinMonth(offset) {
 
 function renderProgress() {
   const { progress, plan, config } = state.overview;
-  const spellLevels = (config?.spellPriorityLevels || ["S"]).join(" + ");
+  const spellLevels = (config?.spellPriorityLevels || ["S", "A"]).join(" + ");
 
   progressPanel.innerHTML = `
     <h2>学习进度</h2>

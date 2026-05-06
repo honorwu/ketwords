@@ -11,6 +11,8 @@
 - `data/backups/`：自动每日备份目录，不提交到仓库。
 - `public/audio/`、`public/assets/fonts/`、`public/fonts.css`：离线音频和字体资源，随仓库提交。
 
+`wordbank.sqlite` 只保存词条数据，不保存认词、听词、默写等学习策略。
+
 旧的 `data/ketwords.sqlite` 已经废弃，不再参与运行。
 
 ## 功能
@@ -76,19 +78,20 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 
 ```json
 {
-  "spellPriorityLevels": ["S"]
-}
-```
-
-如果想让 `A` 级词也进入默写，可以改成：
-
-```json
-{
   "spellPriorityLevels": ["S", "A"]
 }
 ```
 
+如果暂时只想让 `S` 级词进入默写，可以改成：
+
+```json
+{
+  "spellPriorityLevels": ["S"]
+}
+```
+
 这不会清空已有学习进度。
+所有词都会进入认词和听词；`spellPriorityLevels` 只控制哪些优先级进入默写。
 
 ## 版本管理建议
 
