@@ -281,6 +281,33 @@ input {
   font-weight: 800;
 }
 
+.today-targets {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.today-targets span {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 5px 4px;
+  border-radius: 10px;
+  background: rgba(79, 176, 163, 0.1);
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.today-targets strong {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
 .checkin-card-top {
   display: flex;
   align-items: flex-start;

@@ -266,7 +266,19 @@ async function handleApi(request, response, url) {
       return;
     }
 
-    const result = store.submitAnswer(body);
+    let result;
+
+    try {
+      result = store.submitAnswer(body);
+    } catch (error) {
+      if (error.statusCode) {
+        sendError(response, error.statusCode, error.message);
+        return;
+      }
+
+      throw error;
+    }
+
     sendJson(response, 200, {
       ...result,
       overview: store.getOverview(),

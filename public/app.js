@@ -375,8 +375,11 @@ function renderHero() {
           </div>
           <div class="hero-metric">
             <div class="metric-label">今天进度</div>
-            <div class="hero-metric-value">${today.recognizeCards}/${plan.dailyTargets.recognize} 认</div>
-            <div class="word-meta">听 ${today.listenCards}/${plan.dailyTargets.listen} · 拼 ${today.spellCards}/${plan.dailyTargets.spell}</div>
+            <div class="today-targets">
+              <span><strong>${today.recognizeCards}/${plan.dailyTargets.recognize}</strong> 认</span>
+              <span><strong>${today.listenCards}/${plan.dailyTargets.listen}</strong> 听</span>
+              <span><strong>${today.spellCards}/${plan.dailyTargets.spell}</strong> 拼</span>
+            </div>
           </div>
           <div class="hero-metric">
             <div class="metric-label">已掌握词数</div>
@@ -722,7 +725,7 @@ function renderStudyPlanMini() {
 
   const today = getStudyDisplayToday();
   const targets = state.overview.plan?.dailyTargets || {
-    recognize: 30,
+    recognize: 40,
     listen: 20,
     spell: 15,
   };
