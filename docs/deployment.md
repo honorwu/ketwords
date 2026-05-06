@@ -46,7 +46,7 @@ curl http://127.0.0.1:3210/api/health
 - `data/learning.sqlite-wal`
 - `data/learning.sqlite-shm`
 - `data/auth-config.json`，如果没有使用环境变量配置密码和 session 密钥
-- `data/study-config.json`，如果改过默写等级配置
+- `data/study-config.json`，随代码部署，控制哪些优先级进入默写
 - `data/backups/`
 
 `data/learning.sqlite` 如果首次不存在，服务会自动创建空库；已有线上库不会被覆盖。

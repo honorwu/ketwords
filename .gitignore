@@ -10,7 +10,6 @@ data/learning.sqlite-shm
 data/learning.sqlite-wal
 data/wordbank.sqlite-shm
 data/wordbank.sqlite-wal
-data/study-config.json
 data/auth-config.json
 data/backups/
 

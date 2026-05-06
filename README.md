@@ -7,7 +7,7 @@
 - `data/wordbank.sqlite`：词库基线，随仓库提交，保存词条、中文解释、音标和本地音频索引。
 - `data/learning.sqlite`：学习记录库，不提交到仓库，保存进度和答题记录。服务启动时如果不存在会自动创建空库；线上部署时必须持久化保护。
 - `data/auth-config.json`：本地生成的登录密码哈希和 session 密钥，不提交到仓库。
-- `data/study-config.json`：本地学习配置，不提交到仓库。
+- `data/study-config.json`：学习配置，随仓库提交，控制哪些优先级进入默写。
 - `data/backups/`：自动每日备份目录，不提交到仓库。
 - `public/audio/`、`public/assets/fonts/`、`public/fonts.css`：离线音频和字体资源，随仓库提交。
 
@@ -95,8 +95,8 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 
 ## 版本管理建议
 
-- 建议提交：源码、`package-lock.json`、`data/wordbank.sqlite`、`public/audio/`、`public/assets/fonts/`、`public/fonts.css`。
-- 建议忽略：`node_modules/`、`tmp/`、`data/learning.sqlite*`、`data/wordbank.sqlite-shm`、`data/wordbank.sqlite-wal`、`data/study-config.json`、`data/auth-config.json`、`data/backups/`。
+- 建议提交：源码、`package-lock.json`、`data/wordbank.sqlite`、`data/study-config.json`、`public/audio/`、`public/assets/fonts/`、`public/fonts.css`。
+- 建议忽略：`node_modules/`、`tmp/`、`data/learning.sqlite*`、`data/wordbank.sqlite-shm`、`data/wordbank.sqlite-wal`、`data/auth-config.json`、`data/backups/`。
 - `data/a2-key-vocabulary-list.pdf` 和 `tmp/official-materials/` 这类官方材料请先确认版权和分发范围。
 
 ## 部署
