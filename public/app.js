@@ -24,6 +24,8 @@ const state = {
   encouragement: "",
   checkinCache: {},
   spellInputValue: "",
+  studySummaryCountdownTimer: null,
+  studySummaryCloseTimer: null,
 };
 
 const ENCOURAGEMENTS = [
@@ -368,9 +370,52 @@ function handleStudySummaryKeydown(event) {
 }
 
 function closeStudySummaryModal() {
+  if (state.studySummaryCountdownTimer) {
+    window.clearInterval(state.studySummaryCountdownTimer);
+  }
+
+  if (state.studySummaryCloseTimer) {
+    window.clearTimeout(state.studySummaryCloseTimer);
+  }
+
+  state.studySummaryCountdownTimer = null;
+  state.studySummaryCloseTimer = null;
   document.querySelector("#studySummaryModal")?.remove();
   document.body.classList.remove("modal-open");
   window.removeEventListener("keydown", handleStudySummaryKeydown);
+}
+
+function setupStudySummaryCountdown(modal, wrongWordCount) {
+  if (wrongWordCount <= 0) {
+    return;
+  }
+
+  let remainingSeconds = wrongWordCount * 5;
+  const countdown = modal.querySelector("#summaryCountdown");
+  const doneButton = modal.querySelector("#summaryDoneButton");
+  const updateCountdown = () => {
+    countdown.textContent = `${remainingSeconds} 秒后自动关闭`;
+    doneButton.textContent = `${remainingSeconds} 秒后自动关闭`;
+  };
+
+  doneButton.disabled = true;
+  doneButton.classList.add("is-counting");
+  updateCountdown();
+
+  state.studySummaryCountdownTimer = window.setInterval(() => {
+    remainingSeconds -= 1;
+
+    if (remainingSeconds <= 0) {
+      closeStudySummaryModal();
+      return;
+    }
+
+    updateCountdown();
+  }, 1000);
+
+  state.studySummaryCloseTimer = window.setTimeout(() => {
+    closeStudySummaryModal();
+  }, remainingSeconds * 1000);
 }
 
 function renderStudySummaryWrongWords(wrongWords) {
@@ -421,6 +466,7 @@ function showStudySummaryModal() {
   const wrongWords = Array.isArray(state.overview?.todayWrongWords)
     ? state.overview.todayWrongWords
     : [];
+  const countdownSeconds = wrongWords.length * 5;
 
   closeStudySummaryModal();
 
@@ -448,6 +494,11 @@ function showStudySummaryModal() {
       <h3>今日错词</h3>
       ${renderStudySummaryWrongWords(wrongWords)}
       <div class="summary-actions">
+        ${
+          countdownSeconds > 0
+            ? `<span class="summary-countdown" id="summaryCountdown">${countdownSeconds} 秒后自动关闭</span>`
+            : ""
+        }
         <button class="primary-btn" type="button" id="summaryDoneButton">我复习好了</button>
       </div>
     </div>
@@ -459,12 +510,6 @@ function showStudySummaryModal() {
 
   modal.querySelector("#summaryCloseButton").addEventListener("click", closeStudySummaryModal);
   modal.querySelector("#summaryDoneButton").addEventListener("click", closeStudySummaryModal);
-  modal.addEventListener("click", (event) => {
-    if (event.target === modal) {
-      closeStudySummaryModal();
-    }
-  });
-
   modal.querySelectorAll(".review-audio-btn").forEach((button) => {
     button.addEventListener("click", () => {
       playReviewWord(button.dataset.term || "", button.dataset.audioUrl || "");
@@ -474,6 +519,7 @@ function showStudySummaryModal() {
   const focusTarget =
     modal.querySelector(".review-audio-btn") || modal.querySelector("#summaryDoneButton");
   focusTarget.focus({ preventScroll: true });
+  setupStudySummaryCountdown(modal, wrongWords.length);
 }
 
 function escapeHtml(value) {

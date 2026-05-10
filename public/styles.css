@@ -1018,8 +1018,20 @@ input {
 
 .summary-actions {
   display: flex;
+  align-items: center;
+  gap: 12px;
   justify-content: flex-end;
   margin-top: 18px;
+}
+
+.summary-countdown {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.summary-actions .primary-btn.is-counting {
+  cursor: default;
+  opacity: 0.72;
 }
 
 .muted {
