@@ -24,8 +24,6 @@ const state = {
   encouragement: "",
   checkinCache: {},
   spellInputValue: "",
-  studySummaryCountdownTimer: null,
-  studySummaryCloseTimer: null,
 };
 
 const ENCOURAGEMENTS = [
@@ -370,52 +368,9 @@ function handleStudySummaryKeydown(event) {
 }
 
 function closeStudySummaryModal() {
-  if (state.studySummaryCountdownTimer) {
-    window.clearInterval(state.studySummaryCountdownTimer);
-  }
-
-  if (state.studySummaryCloseTimer) {
-    window.clearTimeout(state.studySummaryCloseTimer);
-  }
-
-  state.studySummaryCountdownTimer = null;
-  state.studySummaryCloseTimer = null;
   document.querySelector("#studySummaryModal")?.remove();
   document.body.classList.remove("modal-open");
   window.removeEventListener("keydown", handleStudySummaryKeydown);
-}
-
-function setupStudySummaryCountdown(modal, wrongWordCount) {
-  if (wrongWordCount <= 0) {
-    return;
-  }
-
-  let remainingSeconds = wrongWordCount * 5;
-  const countdown = modal.querySelector("#summaryCountdown");
-  const doneButton = modal.querySelector("#summaryDoneButton");
-  const updateCountdown = () => {
-    countdown.textContent = `${remainingSeconds} 秒后自动关闭`;
-    doneButton.textContent = `${remainingSeconds} 秒后自动关闭`;
-  };
-
-  doneButton.disabled = true;
-  doneButton.classList.add("is-counting");
-  updateCountdown();
-
-  state.studySummaryCountdownTimer = window.setInterval(() => {
-    remainingSeconds -= 1;
-
-    if (remainingSeconds <= 0) {
-      closeStudySummaryModal();
-      return;
-    }
-
-    updateCountdown();
-  }, 1000);
-
-  state.studySummaryCloseTimer = window.setTimeout(() => {
-    closeStudySummaryModal();
-  }, remainingSeconds * 1000);
 }
 
 function renderStudySummaryWrongWords(wrongWords) {
@@ -466,7 +421,6 @@ function showStudySummaryModal() {
   const wrongWords = Array.isArray(state.overview?.todayWrongWords)
     ? state.overview.todayWrongWords
     : [];
-  const countdownSeconds = wrongWords.length * 5;
 
   closeStudySummaryModal();
 
@@ -494,11 +448,6 @@ function showStudySummaryModal() {
       <h3>今日错词</h3>
       ${renderStudySummaryWrongWords(wrongWords)}
       <div class="summary-actions">
-        ${
-          countdownSeconds > 0
-            ? `<span class="summary-countdown" id="summaryCountdown">${countdownSeconds} 秒后自动关闭</span>`
-            : ""
-        }
         <button class="primary-btn" type="button" id="summaryDoneButton">我复习好了</button>
       </div>
     </div>
@@ -519,7 +468,6 @@ function showStudySummaryModal() {
   const focusTarget =
     modal.querySelector(".review-audio-btn") || modal.querySelector("#summaryDoneButton");
   focusTarget.focus({ preventScroll: true });
-  setupStudySummaryCountdown(modal, wrongWords.length);
 }
 
 function escapeHtml(value) {
@@ -1160,8 +1108,8 @@ function renderCard(card) {
           <div class="spell-underlines" id="spellUnderlines"></div>
           <div class="action-row">
             <button class="secondary-btn" id="audioButton">听发音</button>
-            <button class="secondary-btn dont-know-btn" id="dontKnowButton">不会</button>
             <button class="submit-btn" id="submitButton">提交答案</button>
+            <button class="secondary-btn dont-know-btn" id="dontKnowButton">不会</button>
           </div>
         </div>
       `
@@ -1179,8 +1127,8 @@ function renderCard(card) {
         </div>
         <div class="action-row">
           <button class="secondary-btn" id="audioButton">${card.mode === "listen" ? "再听一遍" : "听发音"}</button>
-          <button class="secondary-btn dont-know-btn" id="dontKnowButton">不会</button>
           <button class="submit-btn" id="submitButton">提交答案</button>
+          <button class="secondary-btn dont-know-btn" id="dontKnowButton">不会</button>
         </div>
       `;
 

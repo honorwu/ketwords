@@ -433,6 +433,7 @@ input {
 }
 
 .dont-know-btn {
+  margin-left: auto;
   color: #b13f3f;
   border-color: rgba(243, 110, 110, 0.28);
   background: rgba(255, 255, 255, 0.96);
@@ -1022,16 +1023,6 @@ input {
   gap: 12px;
   justify-content: flex-end;
   margin-top: 18px;
-}
-
-.summary-countdown {
-  color: var(--muted);
-  font-weight: 800;
-}
-
-.summary-actions .primary-btn.is-counting {
-  cursor: default;
-  opacity: 0.72;
 }
 
 .muted {
