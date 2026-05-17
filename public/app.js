@@ -1054,7 +1054,11 @@ function focusSpellInput() {
 }
 
 function getSpellInputLength(card) {
-  return card.baseTerm.replace(/[^a-zA-Z-]/g, "").length;
+  return Number(card.spellingMaxLength) || card.baseTerm.replace(/[^a-zA-Z-]/g, "").length;
+}
+
+function getSpellSubmitMinLength(card) {
+  return Number(card.spellingMinLength) || getSpellInputLength(card);
 }
 
 function renderCard(card) {
@@ -1284,8 +1288,8 @@ async function submitAnswer({ gaveUp = false } = {}) {
 
   if (state.currentCard.mode === "spell" && !gaveUp) {
     const card = state.currentCard;
-    const maxLen = getSpellInputLength(card);
-    if (state.spellInputValue.length < maxLen) {
+    const minLen = getSpellSubmitMinLength(card);
+    if (state.spellInputValue.length < minLen) {
       return;
     }
   }
