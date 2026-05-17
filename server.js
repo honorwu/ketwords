@@ -157,133 +157,133 @@ function serveStatic(request, response, pathname) {
 
 async function handleApi(request, response, url) {
   const { pathname } = url;
-  if (request.method === "GET" && pathname === "/api/auth/me") {
-    const session = auth.readSession(request);
-    sendJson(response, 200, {
-      authenticated: Boolean(session),
-      role: session?.role || null,
-    });
-    return;
-  }
+  const routePath = pathname.startsWith("/api/checkin") ? "/api/checkin" : pathname;
+  const routeKey = `${request.method} ${routePath}`;
 
-  if (request.method === "POST" && pathname === "/api/auth/login") {
-    const body = await readRequestBody(request);
-    const role = body.role === "admin" ? "admin" : "study";
-    const verifiedRole = auth.verifyPassword(role, body.password || "");
-
-    if (!verifiedRole || !auth.canAccess({ role: verifiedRole }, role)) {
-      sendError(response, 401, "密码不正确。");
+  switch (routeKey) {
+    case "GET /api/auth/me": {
+      const session = auth.readSession(request);
+      sendJson(response, 200, {
+        authenticated: Boolean(session),
+        role: session?.role || null,
+      });
       return;
     }
 
-    const token = auth.createSessionToken(verifiedRole);
-    sendJson(
-      response,
-      200,
-      {
-        authenticated: true,
-        role: verifiedRole,
-      },
-      {
-        "Set-Cookie": auth.buildSessionCookie(request, token),
-      }
-    );
-    return;
-  }
+    case "POST /api/auth/login": {
+      const body = await readRequestBody(request);
+      const role = body.role === "admin" ? "admin" : "study";
+      const verifiedRole = auth.verifyPassword(role, body.password || "");
 
-  if (request.method === "POST" && pathname === "/api/auth/logout") {
-    sendJson(
-      response,
-      200,
-      {
-        ok: true,
-      },
-      {
-        "Set-Cookie": auth.buildClearCookie(),
-      }
-    );
-    return;
-  }
-
-  if (request.method === "GET" && pathname === "/api/health") {
-    sendJson(response, 200, {
-      ok: true,
-      build: BUILD_INFO,
-      runtime: store?.getDiagnostics ? store.getDiagnostics() : null,
-    });
-    return;
-  }
-
-  if (request.method === "GET" && pathname === "/api/overview") {
-    if (!requireAuth(request, response, "study")) {
-      return;
-    }
-
-    sendJson(response, 200, store.getOverview());
-    return;
-  }
-
-  if (request.method === "GET" && pathname.startsWith("/api/checkin")) {
-    if (!requireAuth(request, response, "study")) {
-      return;
-    }
-
-    const requestedOffset = Number(url.searchParams.get("offset") || "0");
-    const offset = Number.isFinite(requestedOffset) ? requestedOffset : 0;
-    sendJson(response, 200, store.getDailyActivity(120, offset));
-    return;
-  }
-
-  if (request.method === "GET" && pathname === "/api/study/next") {
-    if (!requireAuth(request, response, "study")) {
-      return;
-    }
-
-    sendJson(response, 200, await buildCard());
-    return;
-  }
-
-  if (request.method === "GET" && pathname === "/api/parent/words") {
-    if (!requireAuth(request, response, "admin")) {
-      return;
-    }
-
-    sendJson(response, 200, {
-      words: store.getWordProgress(),
-    });
-    return;
-  }
-
-  if (request.method === "POST" && pathname === "/api/study/answer") {
-    if (!requireAuth(request, response, "study")) {
-      return;
-    }
-
-    const body = await readRequestBody(request);
-
-    if (!body.wordId || !body.mode) {
-      sendError(response, 400, "缺少答题参数。");
-      return;
-    }
-
-    let result;
-
-    try {
-      result = store.submitAnswer(body);
-    } catch (error) {
-      if (error.statusCode) {
-        sendError(response, error.statusCode, error.message);
+      if (!verifiedRole || !auth.canAccess({ role: verifiedRole }, role)) {
+        sendError(response, 401, "密码不正确。");
         return;
       }
 
-      throw error;
+      const token = auth.createSessionToken(verifiedRole);
+      sendJson(
+        response,
+        200,
+        {
+          authenticated: true,
+          role: verifiedRole,
+        },
+        {
+          "Set-Cookie": auth.buildSessionCookie(request, token),
+        }
+      );
+      return;
     }
 
-    sendJson(response, 200, {
-      ...result,
-      overview: store.getOverview(),
-    });
-    return;
+    case "POST /api/auth/logout":
+      sendJson(
+        response,
+        200,
+        {
+          ok: true,
+        },
+        {
+          "Set-Cookie": auth.buildClearCookie(),
+        }
+      );
+      return;
+
+    case "GET /api/health":
+      sendJson(response, 200, {
+        ok: true,
+        build: BUILD_INFO,
+        runtime: store?.getDiagnostics ? store.getDiagnostics() : null,
+      });
+      return;
+
+    case "GET /api/overview":
+      if (!requireAuth(request, response, "study")) {
+        return;
+      }
+
+      sendJson(response, 200, store.getOverview());
+      return;
+
+    case "GET /api/checkin": {
+      if (!requireAuth(request, response, "study")) {
+        return;
+      }
+
+      const requestedOffset = Number(url.searchParams.get("offset") || "0");
+      const offset = Number.isFinite(requestedOffset) ? requestedOffset : 0;
+      sendJson(response, 200, store.getDailyActivity(120, offset));
+      return;
+    }
+
+    case "GET /api/study/next":
+      if (!requireAuth(request, response, "study")) {
+        return;
+      }
+
+      sendJson(response, 200, await buildCard());
+      return;
+
+    case "GET /api/parent/words":
+      if (!requireAuth(request, response, "admin")) {
+        return;
+      }
+
+      sendJson(response, 200, {
+        words: store.getWordProgress(),
+      });
+      return;
+
+    case "POST /api/study/answer": {
+      if (!requireAuth(request, response, "study")) {
+        return;
+      }
+
+      const body = await readRequestBody(request);
+
+      if (!body.wordId || !body.mode) {
+        sendError(response, 400, "缺少答题参数。");
+        return;
+      }
+
+      let result;
+
+      try {
+        result = store.submitAnswer(body);
+      } catch (error) {
+        if (error.statusCode) {
+          sendError(response, error.statusCode, error.message);
+          return;
+        }
+
+        throw error;
+      }
+
+      sendJson(response, 200, {
+        ...result,
+        overview: store.getOverview(),
+      });
+      return;
+    }
   }
 
   sendError(response, 404, "没有找到这个接口。");

@@ -997,7 +997,10 @@ function scheduleAutoPlay() {
 
 function renderSpellUnderlines() {
   const container = studyPanel.querySelector("#spellUnderlines");
-  if (!container) return;
+
+  if (!container) {
+    return;
+  }
 
   const card = state.currentCard;
   const maxLen = getSpellInputLength(card);
@@ -1013,8 +1016,9 @@ function setupSpellKeyboard() {
 }
 
 function handleSpellKeydown(event) {
-  if (state.currentCard?.mode !== "spell") return;
-  if (state.answerSubmitting) return;
+  if (state.currentCard?.mode !== "spell" || state.answerSubmitting) {
+    return;
+  }
 
   const card = state.currentCard;
   const maxLen = getSpellInputLength(card);
@@ -1047,10 +1051,6 @@ function handleSpellKeydown(event) {
     state.spellInputValue += char;
     renderSpellUnderlines();
   }
-}
-
-function focusSpellInput() {
-  // no-op, spell uses keyboard now
 }
 
 function getSpellInputLength(card) {
@@ -1246,7 +1246,7 @@ function prefetchNextCard() {
 
 function setAnswerControlsDisabled(disabled) {
   studyPanel
-    .querySelectorAll("#submitButton, #dontKnowButton, #audioButton, .option-btn, #spellInput")
+    .querySelectorAll("#submitButton, #dontKnowButton, #audioButton, .option-btn")
     .forEach((element) => {
       element.disabled = disabled;
     });
@@ -1427,7 +1427,6 @@ async function loadNextCard({ showLoading = false } = {}) {
     renderStudyDone(payload.message);
   } else {
     renderCard(payload.card);
-    focusSpellInput();
   }
 
   state.cardLoading = false;
