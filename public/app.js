@@ -24,6 +24,9 @@ const state = {
   encouragement: "",
   checkinCache: {},
   spellInputValue: "",
+  mistakeReviewTimer: null,
+  mistakeReviewInterval: null,
+  mistakeReviewSpeechToken: 0,
 };
 
 const ENCOURAGEMENTS = [
@@ -36,6 +39,10 @@ const ENCOURAGEMENTS = [
   "记住一个词，就是向目标走近一步。",
   "不用一下子全会，稳稳往前就很好。",
 ];
+
+const MISTAKE_REVIEW_MIN_MS = 6500;
+const MISTAKE_REVIEW_MAX_MS = 9500;
+const MISTAKE_REVIEW_BASE_MS = 3400;
 
 const navTabs = Array.from(document.querySelectorAll(".nav-tab"));
 const appShell = document.querySelector(".app-shell");
@@ -91,6 +98,7 @@ navTabs.forEach((button) => {
 
 async function endStudySession() {
   stopStudyTimer({ reset: true });
+  clearMistakeReviewPause();
 
   try {
     setOverview(await requestJson("/api/overview"));
@@ -352,13 +360,7 @@ function getStudySummaryMessage(wrongWords) {
 }
 
 function playReviewWord(term, audioUrl) {
-  if (audioUrl) {
-    const audio = new Audio(audioUrl);
-    audio.play().catch(() => fallbackSpeak(term));
-    return;
-  }
-
-  fallbackSpeak(term);
+  playTermAudio(term, audioUrl);
 }
 
 function handleStudySummaryKeydown(event) {
@@ -911,25 +913,190 @@ function playCardAudio() {
     return;
   }
 
-  if (card.audioUrl) {
-    const audio = new Audio(card.audioUrl);
-    audio.play().catch(() => fallbackSpeak(card.baseTerm));
-    return;
+  playTermAudio(card.baseTerm, card.audioUrl);
+}
+
+function waitMs(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function speakEnglish(text, { rate = 0.92, cancel = true } = {}) {
+  const speakText = String(text || "").trim();
+
+  if (!speakText || !("speechSynthesis" in window)) {
+    return Promise.resolve();
   }
 
-  fallbackSpeak(card.baseTerm);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      resolve();
+    };
+
+    const utterance = new SpeechSynthesisUtterance(speakText);
+    utterance.lang = "en-US";
+    utterance.rate = rate;
+    utterance.onend = finish;
+    utterance.onerror = finish;
+
+    if (cancel) {
+      window.speechSynthesis.cancel();
+    }
+
+    window.speechSynthesis.speak(utterance);
+    window.setTimeout(
+      finish,
+      Math.min(8000, Math.max(1600, speakText.length * 180))
+    );
+  });
+}
+
+function playTermAudio(term, audioUrl) {
+  const speakText = String(term || "").trim();
+
+  if (!speakText) {
+    return Promise.resolve();
+  }
+
+  if (!audioUrl) {
+    return speakEnglish(speakText);
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let fallbackStarted = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      resolve();
+    };
+    const useFallback = () => {
+      if (settled || fallbackStarted) {
+        return;
+      }
+
+      fallbackStarted = true;
+      speakEnglish(speakText).finally(finish);
+    };
+    const audio = new Audio(audioUrl);
+
+    audio.addEventListener("ended", finish, { once: true });
+    audio.addEventListener("error", useFallback, { once: true });
+
+    const playPromise = audio.play();
+    if (playPromise?.catch) {
+      playPromise.catch(useFallback);
+    }
+
+    window.setTimeout(finish, 4500);
+  });
 }
 
 function fallbackSpeak(text) {
+  return speakEnglish(text);
+}
+
+function getCleanSpellingText(text) {
+  return String(text || "").replace(/[^a-zA-Z-]/g, "");
+}
+
+function getSpellingLetters(text) {
+  return getCleanSpellingText(text).split("");
+}
+
+function getSpellingSpeech(text) {
+  return getSpellingLetters(text)
+    .map((letter) => (letter === "-" ? "hyphen" : letter.toUpperCase()))
+    .join(" ");
+}
+
+function getMistakeReviewMs(correctText) {
+  const letterCount =
+    getSpellingLetters(correctText).length || String(correctText || "").length;
+
+  return Math.min(
+    MISTAKE_REVIEW_MAX_MS,
+    Math.max(MISTAKE_REVIEW_MIN_MS, MISTAKE_REVIEW_BASE_MS + letterCount * 330)
+  );
+}
+
+function clearMistakeReviewPause({ cancelSpeech = true } = {}) {
+  window.clearTimeout(state.mistakeReviewTimer);
+  window.clearInterval(state.mistakeReviewInterval);
+  state.mistakeReviewTimer = null;
+  state.mistakeReviewInterval = null;
+  state.mistakeReviewSpeechToken += 1;
+
   if (!("speechSynthesis" in window)) {
     return;
   }
 
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "en-US";
-  utterance.rate = 0.92;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
+  if (cancelSpeech) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+async function playMistakeReviewAudio(card, correctText, token) {
+  const term = String(correctText || card?.baseTerm || card?.term || "").trim();
+
+  if (!term) {
+    return;
+  }
+
+  await playTermAudio(term, card?.audioUrl || "");
+
+  if (token !== state.mistakeReviewSpeechToken) {
+    return;
+  }
+
+  await waitMs(260);
+
+  if (token !== state.mistakeReviewSpeechToken) {
+    return;
+  }
+
+  const spellingSpeech = getSpellingSpeech(term);
+
+  if (spellingSpeech) {
+    await speakEnglish(spellingSpeech, { rate: 0.78 });
+  }
+}
+
+function startMistakeReviewPause(button, card, correctText) {
+  clearMistakeReviewPause();
+
+  const token = state.mistakeReviewSpeechToken;
+  const unlockAt = Date.now() + getMistakeReviewMs(correctText);
+  const updateButton = () => {
+    const secondsLeft = Math.max(1, Math.ceil((unlockAt - Date.now()) / 1000));
+    button.textContent = `先读再拼 ${secondsLeft}s`;
+  };
+
+  button.disabled = true;
+  button.classList.add("review-locked");
+  updateButton();
+
+  state.mistakeReviewInterval = window.setInterval(updateButton, 1000);
+  state.mistakeReviewTimer = window.setTimeout(() => {
+    window.clearInterval(state.mistakeReviewInterval);
+    state.mistakeReviewTimer = null;
+    state.mistakeReviewInterval = null;
+    button.disabled = false;
+    button.textContent = "下一个";
+    button.classList.remove("review-locked");
+  }, Math.max(0, unlockAt - Date.now()));
+
+  playMistakeReviewAudio(card, correctText, token).catch(() => {});
 }
 
 function ensureResultAudioContext() {
@@ -1010,6 +1177,45 @@ function renderSpellUnderlines() {
   }).join("");
 }
 
+function renderSpellingReviewMarkup(correctText) {
+  const letters = getSpellingLetters(correctText);
+
+  if (letters.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="spelling-review">
+      <div class="spelling-review-label">先读一遍，再按字母拼一遍</div>
+      <div class="spelling-review-letters">
+        ${letters
+          .map(
+            (letter) => `
+              <span class="spelling-review-letter">${escapeHtml(letter)}</span>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+function getAttemptLabel(card, payload) {
+  if (payload.gaveUp) {
+    return "这次点了：不会";
+  }
+
+  if (card.mode === "spell") {
+    return `这次写的是：${payload.response || "未填写"}`;
+  }
+
+  const selectedOption = (card.options || []).find(
+    (option) => Number(option.wordId) === Number(payload.choiceWordId)
+  );
+
+  return selectedOption?.label ? `这次选的是：${selectedOption.label}` : "";
+}
+
 function setupSpellKeyboard() {
   document.removeEventListener("keydown", handleSpellKeydown);
   document.addEventListener("keydown", handleSpellKeydown);
@@ -1062,6 +1268,7 @@ function getSpellSubmitMinLength(card) {
 }
 
 function renderCard(card) {
+  clearMistakeReviewPause();
   state.selectedChoiceId = null;
   state.feedback = null;
   state.currentCard = card;
@@ -1355,6 +1562,15 @@ async function submitAnswer({ gaveUp = false } = {}) {
       ? `<span class="answer-phonetic">${escapeHtml(state.currentCard.phonetic)}</span>`
       : "";
 
+    const correctText =
+      result.evaluation.acceptedText ||
+      state.currentCard.baseTerm ||
+      state.currentCard.term;
+    const attemptLabel = getAttemptLabel(state.currentCard, payload);
+    const attemptMarkup = attemptLabel
+      ? `<div class="answer-attempt">${escapeHtml(attemptLabel)}</div>`
+      : "";
+
     feedbackArea.innerHTML = `
       <div class="feedback wrong">
         <div class="answer-reveal">
@@ -1364,20 +1580,31 @@ async function submitAnswer({ gaveUp = false } = {}) {
             ${phoneticMarkup}
           </div>
           <div class="answer-meaning">${escapeHtml(state.currentCard.chineseMeaning || result.evaluation.acceptedText || "")}</div>
+          ${attemptMarkup}
+          ${renderSpellingReviewMarkup(correctText)}
+          <div class="answer-guidance">停一下，跟读并拼一遍，再进入下一题。</div>
         </div>
       </div>
     `;
   }
 
   if (state.currentCard.mode === "spell" && result.evaluation.result === "wrong") {
-    const acceptedText = (result.evaluation.acceptedText || state.currentCard.baseTerm).replace(/[^a-zA-Z-]/g, "");
+    const acceptedText = getCleanSpellingText(
+      result.evaluation.acceptedText || state.currentCard.baseTerm
+    );
     const container = studyPanel.querySelector("#spellUnderlines");
     if (container) {
       container.querySelectorAll(".spell-char").forEach((span, i) => {
         const inputChar = state.spellInputValue[i] || "";
         const correctChar = acceptedText[i] || "";
-        if (inputChar && inputChar.toLowerCase() !== correctChar.toLowerCase()) {
+        if (!inputChar && correctChar) {
+          span.textContent = correctChar;
+          span.classList.add("missing-char");
+        } else if (inputChar && inputChar.toLowerCase() !== correctChar.toLowerCase()) {
           span.classList.add("wrong-char");
+          if (correctChar) {
+            span.dataset.correct = correctChar;
+          }
         }
       });
     }
@@ -1388,8 +1615,17 @@ async function submitAnswer({ gaveUp = false } = {}) {
   submitButton.disabled = false;
   submitButton.textContent = "下一个";
   submitButton.classList.add("next-ready");
-  submitButton.focus({ preventScroll: true });
+  if (result.evaluation.result === "wrong") {
+    startMistakeReviewPause(
+      submitButton,
+      state.currentCard,
+      result.evaluation.acceptedText || state.currentCard.baseTerm || state.currentCard.term
+    );
+  } else {
+    submitButton.focus({ preventScroll: true });
+  }
   submitButton.addEventListener("click", async () => {
+    clearMistakeReviewPause();
     submitButton.disabled = true;
     submitButton.textContent = "正在准备...";
     await loadNextCard();
@@ -1397,6 +1633,7 @@ async function submitAnswer({ gaveUp = false } = {}) {
 }
 
 async function loadNextCard({ showLoading = false } = {}) {
+  clearMistakeReviewPause();
   state.cardLoading = true;
 
   if (showLoading) {

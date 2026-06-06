@@ -730,13 +730,14 @@ input {
   justify-content: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 20px 16px;
+  padding: 20px 16px 34px;
 }
 
 .spell-char {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative;
   width: 42px;
   height: 52px;
   font-size: 2rem;
@@ -749,6 +750,33 @@ input {
 
 .spell-char.wrong-char {
   color: var(--red);
+  border-color: rgba(217, 74, 74, 0.72);
+}
+
+.spell-char.missing-char {
+  color: #247438;
+  border-color: rgba(64, 153, 82, 0.72);
+  background: rgba(134, 200, 122, 0.14);
+  border-radius: 10px 10px 0 0;
+}
+
+.spell-char[data-correct]::after {
+  content: attr(data-correct);
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(134, 200, 122, 0.2);
+  color: #247438;
+  font-family: "Nunito", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
 }
 
 .spell-hint {
@@ -842,9 +870,71 @@ input {
   line-height: 1.25;
 }
 
+.answer-attempt,
+.answer-guidance {
+  justify-self: center;
+  max-width: 100%;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.answer-attempt {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #9b3a3a;
+}
+
+.answer-guidance {
+  color: #7a3a3a;
+}
+
+.spelling-review {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  margin-top: 2px;
+}
+
+.spelling-review-label {
+  color: #7a3a3a;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.spelling-review-letters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.spelling-review-letter {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #4a1e1e;
+  font-family: "Baloo 2", "Nunito", system-ui, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 900;
+  text-transform: lowercase;
+}
+
 .submit-btn.next-ready {
   background: linear-gradient(135deg, var(--teal), #72c9b8);
   box-shadow: 0 14px 32px rgba(79, 176, 163, 0.24);
+}
+
+.submit-btn.review-locked,
+.submit-btn.review-locked:disabled {
+  opacity: 1;
+  background: linear-gradient(135deg, #d94a4a, var(--primary));
+  box-shadow: 0 14px 32px rgba(217, 74, 74, 0.2);
 }
 
 .list {
