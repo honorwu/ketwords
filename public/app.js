@@ -1077,6 +1077,118 @@ function getSpellingSpeech(text) {
     .join(" ");
 }
 
+const SPELLING_LETTER_SPEECH = {
+  a: "ay",
+  b: "bee",
+  c: "see",
+  d: "dee",
+  e: "ee",
+  f: "eff",
+  g: "gee",
+  h: "aitch",
+  i: "eye",
+  j: "jay",
+  k: "kay",
+  l: "el",
+  m: "em",
+  n: "en",
+  o: "oh",
+  p: "pee",
+  q: "cue",
+  r: "ar",
+  s: "ess",
+  t: "tee",
+  u: "you",
+  v: "vee",
+  w: "double you",
+  x: "ex",
+  y: "why",
+  z: "zee",
+  "-": "hyphen",
+};
+
+function getLetterSpeechText(letter) {
+  return SPELLING_LETTER_SPEECH[String(letter || "").toLowerCase()] || letter;
+}
+
+function getLetterAudioUrl(letter) {
+  const normalized = String(letter || "").toLowerCase() === "-" ? "hyphen" : String(letter || "").toLowerCase();
+
+  if (!/^(?:[a-z]|hyphen)$/.test(normalized)) {
+    return "";
+  }
+
+  return `/audio/spelling-letters/${normalized}.m4a`;
+}
+
+function playAudioUrl(audioUrl) {
+  if (!audioUrl) {
+    return Promise.reject(new Error("Missing audio URL"));
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      resolve();
+    };
+    const fail = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      reject(new Error("Audio playback failed"));
+    };
+    const audio = new Audio(audioUrl);
+
+    audio.addEventListener("ended", finish, { once: true });
+    audio.addEventListener("error", fail, { once: true });
+
+    const playPromise = audio.play();
+    if (playPromise?.catch) {
+      playPromise.catch(fail);
+    }
+
+    window.setTimeout(finish, 2200);
+  });
+}
+
+async function speakSpellingLetters(text, token) {
+  const letters = getSpellingLetters(text);
+
+  for (let index = 0; index < letters.length; index += 1) {
+    if (token !== state.mistakeReviewSpeechToken) {
+      return;
+    }
+
+    const letter = letters[index];
+    const speechText = getLetterSpeechText(letter);
+    const audioUrl = getLetterAudioUrl(letter);
+
+    if (index === 0 && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    try {
+      await playAudioUrl(audioUrl);
+    } catch (error) {
+      await speakEnglish(speechText, {
+        rate: 0.74,
+        cancel: index === 0,
+      });
+    }
+
+    if (index < letters.length - 1) {
+      await waitMs(70);
+    }
+  }
+}
+
 function getMistakeReviewMs(correctText) {
   const letterCount =
     getSpellingLetters(correctText).length || String(correctText || "").length;
@@ -1125,7 +1237,7 @@ async function playMistakeReviewAudio(card, correctText, token) {
   const spellingSpeech = getSpellingSpeech(term);
 
   if (spellingSpeech) {
-    await speakEnglish(spellingSpeech, { rate: 0.78 });
+    await speakSpellingLetters(term, token);
   }
 }
 
