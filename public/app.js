@@ -113,9 +113,7 @@ async function endStudySession() {
 }
 
 endStudyButton.addEventListener("click", () => {
-  endStudySession().catch((error) => {
-    console.error(error);
-  });
+  showEndStudyConfirmModal();
 });
 startStudyButton.addEventListener("click", () => {
   beginStudySession();
@@ -361,6 +359,65 @@ function getStudySummaryMessage(wrongWords) {
 
 function playReviewWord(term, audioUrl) {
   playTermAudio(term, audioUrl);
+}
+
+function handleEndStudyConfirmKeydown(event) {
+  if (event.key === "Escape") {
+    closeEndStudyConfirmModal();
+  }
+}
+
+function closeEndStudyConfirmModal() {
+  document.querySelector("#endStudyConfirmModal")?.remove();
+  document.body.classList.remove("modal-open");
+  window.removeEventListener("keydown", handleEndStudyConfirmKeydown);
+}
+
+function showEndStudyConfirmModal() {
+  closeEndStudyConfirmModal();
+
+  const modal = document.createElement("div");
+  modal.className = "study-summary-modal";
+  modal.id = "endStudyConfirmModal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "endStudyConfirmTitle");
+  modal.innerHTML = `
+    <div class="study-summary-dialog end-study-confirm-dialog">
+      <div class="summary-header">
+        <div>
+          <p class="summary-kicker">确认一下</p>
+          <h2 id="endStudyConfirmTitle">结束今天的学习？</h2>
+        </div>
+        <button class="summary-close-btn" type="button" id="endStudyCloseButton" aria-label="关闭">x</button>
+      </div>
+      <p class="summary-message">结束后会回到今日任务，并显示今天的错词复习总结。</p>
+      <div class="confirm-actions">
+        <button class="secondary-btn" type="button" id="continueStudyButton">继续学习</button>
+        <button class="danger-btn" type="button" id="confirmEndStudyButton">确认结束</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+  window.addEventListener("keydown", handleEndStudyConfirmKeydown);
+
+  modal.querySelector("#endStudyCloseButton").addEventListener("click", closeEndStudyConfirmModal);
+  modal.querySelector("#continueStudyButton").addEventListener("click", closeEndStudyConfirmModal);
+  modal.querySelector("#confirmEndStudyButton").addEventListener("click", async () => {
+    const confirmButton = modal.querySelector("#confirmEndStudyButton");
+    confirmButton.disabled = true;
+    confirmButton.textContent = "正在结束...";
+    closeEndStudyConfirmModal();
+
+    try {
+      await endStudySession();
+    } catch (error) {
+      console.error(error);
+    }
+  });
+  modal.querySelector("#continueStudyButton").focus({ preventScroll: true });
 }
 
 function handleStudySummaryKeydown(event) {

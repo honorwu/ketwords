@@ -985,6 +985,10 @@ input {
   box-shadow: 0 28px 80px rgba(36, 48, 58, 0.24);
 }
 
+.end-study-confirm-dialog {
+  width: min(460px, 100%);
+}
+
 .summary-header {
   display: flex;
   align-items: flex-start;
@@ -1115,6 +1119,13 @@ input {
   margin-top: 18px;
 }
 
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+
 .muted {
   color: var(--muted);
 }
@@ -1241,8 +1252,14 @@ input {
     justify-content: stretch;
   }
 
+  .confirm-actions {
+    grid-template-columns: 1fr;
+  }
+
   .summary-review-actions .review-audio-btn,
-  .summary-actions .primary-btn {
+  .summary-actions .primary-btn,
+  .confirm-actions .secondary-btn,
+  .confirm-actions .danger-btn {
     width: 100%;
   }
 
