@@ -881,9 +881,9 @@ function renderStudyPlanMini() {
 
   const today = getStudyDisplayToday();
   const targets = state.overview.plan?.dailyTargets || {
-    recognize: 40,
-    listen: 20,
-    spell: 15,
+    recognize: 50,
+    listen: 40,
+    spell: 30,
   };
 
   studyPlanMini.className = "study-plan-mini";
