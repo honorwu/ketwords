@@ -1064,16 +1064,35 @@ function fallbackSpeak(text) {
 }
 
 function getCleanSpellingText(text) {
-  return String(text || "").replace(/[^a-zA-Z-]/g, "");
+  return String(text || "").replace(/[^a-zA-Z0-9]/g, "");
 }
 
 function getSpellingLetters(text) {
   return getCleanSpellingText(text).split("");
 }
 
+function getSpellingPattern(text, minInputSlots = 0) {
+  const pattern = Array.from(String(text || "")).map((char) =>
+    /[a-z0-9]/i.test(char)
+      ? { type: "input", char }
+      : { type: "fixed", char }
+  );
+  const inputSlots = pattern.filter((item) => item.type === "input").length;
+
+  for (let index = inputSlots; index < minInputSlots; index += 1) {
+    pattern.push({ type: "input", char: "" });
+  }
+
+  return pattern;
+}
+
+function renderFixedSpellingChar(char) {
+  return /\s/.test(char) ? "&nbsp;" : escapeHtml(char);
+}
+
 function getSpellingSpeech(text) {
   return getSpellingLetters(text)
-    .map((letter) => (letter === "-" ? "hyphen" : letter.toUpperCase()))
+    .map((letter) => letter.toUpperCase())
     .join(" ");
 }
 
@@ -1340,10 +1359,22 @@ function renderSpellUnderlines() {
 
   const card = state.currentCard;
   const maxLen = getSpellInputLength(card);
-  container.innerHTML = Array.from({ length: maxLen }, (_, i) => {
-    const char = state.spellInputValue[i] || "";
-    return `<span class="spell-char" data-index="${i}">${char}</span>`;
-  }).join("");
+  const pattern = getSpellingPattern(card.baseTerm || card.term, maxLen);
+  let inputIndex = 0;
+
+  container.innerHTML = pattern
+    .map((item) => {
+      if (item.type === "fixed") {
+        const spaceClass = /\s/.test(item.char) ? " fixed-space" : "";
+        return `<span class="spell-char fixed-char${spaceClass}">${renderFixedSpellingChar(item.char)}</span>`;
+      }
+
+      const currentIndex = inputIndex;
+      const char = state.spellInputValue[currentIndex] || "";
+      inputIndex += 1;
+      return `<span class="spell-char spell-input-char" data-input-index="${currentIndex}">${escapeHtml(char)}</span>`;
+    })
+    .join("");
 }
 
 function renderSpellingReviewMarkup(correctText) {
@@ -1421,7 +1452,7 @@ function handleSpellKeydown(event) {
   }
 
   const char = event.key.toLowerCase();
-  if (/^[a-z-]$/.test(char) && state.spellInputValue.length < maxLen) {
+  if (/^[a-z0-9]$/.test(char) && state.spellInputValue.length < maxLen) {
     event.preventDefault();
     state.spellInputValue += char;
     renderSpellUnderlines();
@@ -1429,7 +1460,7 @@ function handleSpellKeydown(event) {
 }
 
 function getSpellInputLength(card) {
-  return Number(card.spellingMaxLength) || card.baseTerm.replace(/[^a-zA-Z-]/g, "").length;
+  return Number(card.spellingMaxLength) || getCleanSpellingText(card.baseTerm).length;
 }
 
 function getSpellSubmitMinLength(card) {
@@ -1763,7 +1794,8 @@ async function submitAnswer({ gaveUp = false } = {}) {
     );
     const container = studyPanel.querySelector("#spellUnderlines");
     if (container) {
-      container.querySelectorAll(".spell-char").forEach((span, i) => {
+      container.querySelectorAll(".spell-input-char").forEach((span) => {
+        const i = Number(span.dataset.inputIndex);
         const inputChar = state.spellInputValue[i] || "";
         const correctChar = acceptedText[i] || "";
         if (!inputChar && correctChar) {

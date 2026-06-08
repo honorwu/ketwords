@@ -78,7 +78,7 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 
 ```json
 {
-  "spellPriorityLevels": ["S", "A"]
+  "spellPriorityLevels": ["S", "A", "B"]
 }
 ```
 
@@ -91,7 +91,7 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 ```
 
 这不会清空已有学习进度。
-所有词都会进入认词和听词；`spellPriorityLevels` 只控制哪些优先级进入默写。
+所有词都会进入认词和听词；`spellPriorityLevels` 只控制哪些优先级进入默写。默写时空格、短划线、句点这类符号会直接显示，孩子只需要输入字母和数字。
 
 ## 版本管理建议
 
