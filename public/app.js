@@ -1,48 +1,23 @@
-const state = {
-  isAdmin: window.location.pathname === "/admin",
-  overview: null,
-  currentCard: null,
-  selectedChoiceId: null,
-  startedAt: 0,
-  feedback: null,
-  prefetchedNext: null,
-  prefetchedNextPromise: null,
-  parentWords: [],
-  parentWordsNeedRefresh: true,
-  parentWordsLoading: false,
-  parentWordFilter: "",
-  answerSubmitting: false,
-  cardLoading: false,
-  studyTimerStartedAt: 0,
-  studyTimerId: null,
-  studyElapsedSeconds: 0,
-  studyDisplayStats: null,
-  auth: null,
-  appLoaded: false,
-  audioAutoPlayTimer: null,
-  resultAudioContext: null,
-  encouragement: "",
-  checkinCache: {},
-  spellInputValue: "",
-  mistakeReviewTimer: null,
-  mistakeReviewInterval: null,
-  mistakeReviewSpeechToken: 0,
-};
-
-const ENCOURAGEMENTS = [
-  "今天学一点点，考试时就会轻松很多。",
-  "你不是在赶路，你是在一天天变厉害。",
-  "先拿下一个词，再拿下下一个词。",
-  "每次认真答一题，都是在给自己加分。",
-  "慢一点没有关系，坚持就很了不起。",
-  "今天的努力，会变成考场上的自信。",
-  "记住一个词，就是向目标走近一步。",
-  "不用一下子全会，稳稳往前就很好。",
-];
-
-const MISTAKE_REVIEW_MIN_MS = 6500;
-const MISTAKE_REVIEW_MAX_MS = 9500;
-const MISTAKE_REVIEW_BASE_MS = 3400;
+import {
+  ENCOURAGEMENTS,
+  MISTAKE_REVIEW_BASE_MS,
+  MISTAKE_REVIEW_MAX_MS,
+  MISTAKE_REVIEW_MIN_MS,
+  state,
+} from "./app-state.js";
+import {
+  getCleanSpellingText,
+  getLetterAudioUrl,
+  getLetterSpeechText,
+  getSpellingLetters,
+  getSpellingPattern,
+  getSpellingSpeech,
+  playAudioUrl,
+  playTermAudio,
+  speakEnglish,
+  waitMs,
+} from "./app-audio.js";
+import { ensureResultAudioContext, playResultSound } from "./result-sound.js";
 
 const navTabs = Array.from(document.querySelectorAll(".nav-tab"));
 const appShell = document.querySelector(".app-shell");
@@ -973,208 +948,8 @@ function playCardAudio() {
   playTermAudio(card.baseTerm, card.audioUrl);
 }
 
-function waitMs(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-function speakEnglish(text, { rate = 0.92, cancel = true } = {}) {
-  const speakText = String(text || "").trim();
-
-  if (!speakText || !("speechSynthesis" in window)) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      resolve();
-    };
-
-    const utterance = new SpeechSynthesisUtterance(speakText);
-    utterance.lang = "en-US";
-    utterance.rate = rate;
-    utterance.onend = finish;
-    utterance.onerror = finish;
-
-    if (cancel) {
-      window.speechSynthesis.cancel();
-    }
-
-    window.speechSynthesis.speak(utterance);
-    window.setTimeout(
-      finish,
-      Math.min(8000, Math.max(1600, speakText.length * 180))
-    );
-  });
-}
-
-function playTermAudio(term, audioUrl) {
-  const speakText = String(term || "").trim();
-
-  if (!speakText) {
-    return Promise.resolve();
-  }
-
-  if (!audioUrl) {
-    return speakEnglish(speakText);
-  }
-
-  return new Promise((resolve) => {
-    let settled = false;
-    let fallbackStarted = false;
-    const finish = () => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      resolve();
-    };
-    const useFallback = () => {
-      if (settled || fallbackStarted) {
-        return;
-      }
-
-      fallbackStarted = true;
-      speakEnglish(speakText).finally(finish);
-    };
-    const audio = new Audio(audioUrl);
-
-    audio.addEventListener("ended", finish, { once: true });
-    audio.addEventListener("error", useFallback, { once: true });
-
-    const playPromise = audio.play();
-    if (playPromise?.catch) {
-      playPromise.catch(useFallback);
-    }
-
-    window.setTimeout(finish, 4500);
-  });
-}
-
-function fallbackSpeak(text) {
-  return speakEnglish(text);
-}
-
-function getCleanSpellingText(text) {
-  return String(text || "").replace(/[^a-zA-Z0-9]/g, "");
-}
-
-function getSpellingLetters(text) {
-  return getCleanSpellingText(text).split("");
-}
-
-function getSpellingPattern(text, minInputSlots = 0) {
-  const pattern = Array.from(String(text || "")).map((char) =>
-    /[a-z0-9]/i.test(char)
-      ? { type: "input", char }
-      : { type: "fixed", char }
-  );
-  const inputSlots = pattern.filter((item) => item.type === "input").length;
-
-  for (let index = inputSlots; index < minInputSlots; index += 1) {
-    pattern.push({ type: "input", char: "" });
-  }
-
-  return pattern;
-}
-
 function renderFixedSpellingChar(char) {
   return /\s/.test(char) ? "&nbsp;" : escapeHtml(char);
-}
-
-function getSpellingSpeech(text) {
-  return getSpellingLetters(text)
-    .map((letter) => letter.toUpperCase())
-    .join(" ");
-}
-
-const SPELLING_LETTER_SPEECH = {
-  a: "ay",
-  b: "bee",
-  c: "see",
-  d: "dee",
-  e: "ee",
-  f: "eff",
-  g: "gee",
-  h: "aitch",
-  i: "eye",
-  j: "jay",
-  k: "kay",
-  l: "el",
-  m: "em",
-  n: "en",
-  o: "oh",
-  p: "pee",
-  q: "cue",
-  r: "ar",
-  s: "ess",
-  t: "tee",
-  u: "you",
-  v: "vee",
-  w: "double you",
-  x: "ex",
-  y: "why",
-  z: "zee",
-  "-": "hyphen",
-};
-
-function getLetterSpeechText(letter) {
-  return SPELLING_LETTER_SPEECH[String(letter || "").toLowerCase()] || letter;
-}
-
-function getLetterAudioUrl(letter) {
-  const normalized = String(letter || "").toLowerCase() === "-" ? "hyphen" : String(letter || "").toLowerCase();
-
-  if (!/^(?:[a-z]|hyphen)$/.test(normalized)) {
-    return "";
-  }
-
-  return `/audio/spelling-letters/${normalized}.m4a`;
-}
-
-function playAudioUrl(audioUrl) {
-  if (!audioUrl) {
-    return Promise.reject(new Error("Missing audio URL"));
-  }
-
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      resolve();
-    };
-    const fail = () => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      reject(new Error("Audio playback failed"));
-    };
-    const audio = new Audio(audioUrl);
-
-    audio.addEventListener("ended", finish, { once: true });
-    audio.addEventListener("error", fail, { once: true });
-
-    const playPromise = audio.play();
-    if (playPromise?.catch) {
-      playPromise.catch(fail);
-    }
-
-    window.setTimeout(finish, 2200);
-  });
 }
 
 async function speakSpellingLetters(text, token) {
@@ -1285,62 +1060,6 @@ function startMistakeReviewPause(button, card, correctText) {
   }, Math.max(0, unlockAt - Date.now()));
 
   playMistakeReviewAudio(card, correctText, token).catch(() => {});
-}
-
-function ensureResultAudioContext() {
-  const AudioContext = window.AudioContext || window.webkitAudioContext;
-
-  if (!AudioContext) {
-    return null;
-  }
-
-  if (!state.resultAudioContext) {
-    state.resultAudioContext = new AudioContext();
-  }
-
-  if (state.resultAudioContext.state === "suspended") {
-    state.resultAudioContext.resume().catch(() => {});
-  }
-
-  return state.resultAudioContext;
-}
-
-function playResultSound(result) {
-  const context = ensureResultAudioContext();
-
-  if (!context) {
-    return;
-  }
-
-  const now = context.currentTime;
-  const isCorrect = result === "correct";
-  const notes = isCorrect
-    ? [
-        { frequency: 660, start: 0, duration: 0.14, volume: 0.3 },
-        { frequency: 880, start: 0.12, duration: 0.18, volume: 0.32 },
-        { frequency: 1046, start: 0.28, duration: 0.16, volume: 0.28 },
-      ]
-    : [
-        { frequency: 220, start: 0, duration: 0.22, volume: 0.34 },
-        { frequency: 165, start: 0.2, duration: 0.28, volume: 0.36 },
-        { frequency: 130, start: 0.46, duration: 0.26, volume: 0.3 },
-      ];
-
-  notes.forEach((note) => {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-
-    oscillator.type = isCorrect ? "sine" : "triangle";
-    oscillator.frequency.setValueAtTime(note.frequency, now + note.start);
-    gain.gain.setValueAtTime(0.0001, now + note.start);
-    gain.gain.exponentialRampToValueAtTime(note.volume, now + note.start + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + note.start + note.duration);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(now + note.start);
-    oscillator.stop(now + note.start + note.duration + 0.02);
-  });
-
 }
 
 function scheduleAutoPlay() {
@@ -1703,7 +1422,7 @@ async function submitAnswer({ gaveUp = false } = {}) {
 
   state.answerSubmitting = true;
   setAnswerControlsDisabled(true);
-  ensureResultAudioContext();
+  ensureResultAudioContext(state);
   const previousToday = getStudyDisplayToday();
 
   const payload = {
@@ -1747,7 +1466,7 @@ async function submitAnswer({ gaveUp = false } = {}) {
   state.parentWordsNeedRefresh = true;
   renderOverview();
   prefetchNextCard();
-  playResultSound(result.evaluation.result);
+  playResultSound(state, result.evaluation.result);
   markChoiceResult({
     selectedChoiceId: payload.choiceWordId,
     correctWordId: payload.wordId,
