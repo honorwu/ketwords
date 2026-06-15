@@ -7,15 +7,9 @@ import {
 } from "./app-state.js";
 import {
   getCleanSpellingText,
-  getLetterAudioUrl,
-  getLetterSpeechText,
   getSpellingLetters,
   getSpellingPattern,
-  getSpellingSpeech,
-  playAudioUrl,
   playTermAudio,
-  speakEnglish,
-  waitMs,
 } from "./app-audio.js";
 import {
   buildMetricCard,
@@ -655,41 +649,6 @@ function playCardAudio() {
   playTermAudio(card.baseTerm, card.audioUrl);
 }
 
-function renderFixedSpellingChar(char) {
-  return /\s/.test(char) ? "&nbsp;" : escapeHtml(char);
-}
-
-async function speakSpellingLetters(text, token) {
-  const letters = getSpellingLetters(text);
-
-  for (let index = 0; index < letters.length; index += 1) {
-    if (token !== state.mistakeReviewSpeechToken) {
-      return;
-    }
-
-    const letter = letters[index];
-    const speechText = getLetterSpeechText(letter);
-    const audioUrl = getLetterAudioUrl(letter);
-
-    if (index === 0 && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-
-    try {
-      await playAudioUrl(audioUrl);
-    } catch (error) {
-      await speakEnglish(speechText, {
-        rate: 0.74,
-        cancel: index === 0,
-      });
-    }
-
-    if (index < letters.length - 1) {
-      await waitMs(70);
-    }
-  }
-}
-
 function getMistakeReviewMs(correctText) {
   const letterCount =
     getSpellingLetters(correctText).length || String(correctText || "").length;
@@ -724,22 +683,6 @@ async function playMistakeReviewAudio(card, correctText, token) {
   }
 
   await playTermAudio(term, card?.audioUrl || "");
-
-  if (token !== state.mistakeReviewSpeechToken) {
-    return;
-  }
-
-  await waitMs(260);
-
-  if (token !== state.mistakeReviewSpeechToken) {
-    return;
-  }
-
-  const spellingSpeech = getSpellingSpeech(term);
-
-  if (spellingSpeech) {
-    await speakSpellingLetters(term, token);
-  }
 }
 
 function startMistakeReviewPause(button, card, correctText) {
@@ -749,7 +692,7 @@ function startMistakeReviewPause(button, card, correctText) {
   const unlockAt = Date.now() + getMistakeReviewMs(correctText);
   const updateButton = () => {
     const secondsLeft = Math.max(1, Math.ceil((unlockAt - Date.now()) / 1000));
-    button.textContent = `先读再拼 ${secondsLeft}s`;
+    button.textContent = `先看一遍 ${secondsLeft}s`;
   };
 
   button.disabled = true;
@@ -791,8 +734,7 @@ function renderSpellUnderlines() {
   container.innerHTML = pattern
     .map((item) => {
       if (item.type === "fixed") {
-        const spaceClass = /\s/.test(item.char) ? " fixed-space" : "";
-        return `<span class="spell-char fixed-char${spaceClass}">${renderFixedSpellingChar(item.char)}</span>`;
+        return `<span class="spell-char fixed-char">${escapeHtml(item.char)}</span>`;
       }
 
       const currentIndex = inputIndex;
@@ -812,7 +754,7 @@ function renderSpellingReviewMarkup(correctText) {
 
   return `
     <div class="spelling-review">
-      <div class="spelling-review-label">先读一遍，再按字母拼一遍</div>
+      <div class="spelling-review-label">看清拼写，再写一遍</div>
       <div class="spelling-review-letters">
         ${letters
           .map(
@@ -1196,6 +1138,12 @@ async function submitAnswer({ gaveUp = false } = {}) {
     const attemptMarkup = attemptLabel
       ? `<div class="answer-attempt">${escapeHtml(attemptLabel)}</div>`
       : "";
+    const spellingReviewMarkup =
+      state.currentCard.mode === "spell" ? renderSpellingReviewMarkup(correctText) : "";
+    const guidanceText =
+      state.currentCard.mode === "spell"
+        ? "停一下，跟读并看清拼写，再进入下一题。"
+        : "停一下，跟读一遍，再进入下一题。";
 
     feedbackArea.innerHTML = `
       <div class="feedback wrong">
@@ -1207,8 +1155,8 @@ async function submitAnswer({ gaveUp = false } = {}) {
           </div>
           <div class="answer-meaning">${escapeHtml(state.currentCard.chineseMeaning || result.evaluation.acceptedText || "")}</div>
           ${attemptMarkup}
-          ${renderSpellingReviewMarkup(correctText)}
-          <div class="answer-guidance">停一下，跟读并拼一遍，再进入下一题。</div>
+          ${spellingReviewMarkup}
+          <div class="answer-guidance">${escapeHtml(guidanceText)}</div>
         </div>
       </div>
     `;

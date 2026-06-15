@@ -102,12 +102,11 @@ export function getSpellingLetters(text) {
 
 
 export function getSpellingPattern(text, minInputSlots = 0) {
-  const pattern = Array.from(String(text || "")).map((char) =>
-    /[a-z0-9]/i.test(char)
-      ? { type: "input", char }
-      : { type: "fixed", char }
-  );
-  const inputSlots = pattern.filter((item) => item.type === "input").length;
+  const pattern = Array.from(getCleanSpellingText(text)).map((char) => ({
+    type: "input",
+    char,
+  }));
+  const inputSlots = pattern.length;
 
   for (let index = inputSlots; index < minInputSlots; index += 1) {
     pattern.push({ type: "input", char: "" });
@@ -207,4 +206,3 @@ export function playAudioUrl(audioUrl) {
     window.setTimeout(finish, 2200);
   });
 }
-
