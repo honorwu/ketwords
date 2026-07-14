@@ -17,8 +17,8 @@ import {
   formatMinutesValue,
   formatPartOfSpeechLabel,
   formatPercent,
+  frequencyLabel,
   numberValue,
-  priorityLabel,
 } from "./app-format.js";
 import { createStudySessionUi } from "./app-study-session.js";
 import { ensureResultAudioContext, playResultSound } from "./result-sound.js";
@@ -577,7 +577,7 @@ function renderParentWordPanel() {
           : `<div class="word-table">
               <div class="word-row header">
                 <div>单词</div>
-                <div>等级</div>
+                <div>日常词频</div>
                 <div>掌握度</div>
                 <div>阶段</div>
                 <div>答题次数</div>
@@ -591,7 +591,7 @@ function renderParentWordPanel() {
                         <strong>${escapeHtml(item.term)}</strong>
                         <div class="word-meta">${escapeHtml(item.meaning || "中文会在学习时逐步补全")}</div>
                       </div>
-                      <div>${escapeHtml(item.priority)}</div>
+                      <div>${escapeHtml(frequencyLabel(item.frequencyBand, item.frequencyZipf))}</div>
                       <div>
                         <div>${item.masteryPercent}% · ${escapeHtml(item.mastery)}</div>
                         <div class="tiny-bar"><div class="tiny-bar-fill" style="width:${item.masteryPercent}%"></div></div>
@@ -849,7 +849,7 @@ function renderCard(card) {
       : card.mode === "spell"
         ? card.chineseMeaning
         : card.term;
-  const priorityClass = String(card.priority || "B")
+  const priorityClass = String(card.frequencyBand || "C")
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, "");
 
@@ -916,7 +916,7 @@ function renderCard(card) {
       <div class="card-top">
         <div>
           <div class="badge-row">
-            <span class="badge priority-${priorityClass}">${escapeHtml(priorityLabel(card.priority))}</span>
+            <span class="badge priority-${priorityClass}">${escapeHtml(frequencyLabel(card.frequencyBand, card.frequencyZipf))}</span>
             <span class="badge priority-b">${escapeHtml(card.theme)}</span>
             <span class="badge priority-c">${formatPartOfSpeechLabel(card.partOfSpeech)}</span>
             <span class="badge priority-c">${escapeHtml(card.prompt)}</span>
@@ -983,7 +983,7 @@ function showStudyLoading() {
   studyPanel.innerHTML = `
     <div class="empty-state">
       <h2>正在安排下一题</h2>
-      <p>系统会优先推送高优先级词和到期复习词。</p>
+      <p>系统会优先推送未接触的高频词和到期复习词。</p>
     </div>
   `;
 }

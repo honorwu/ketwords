@@ -75,12 +75,11 @@ export function formatPartOfSpeechLabel(partOfSpeech) {
     .join(" + ");
 }
 
-export function priorityLabel(priority) {
-  return priority === "S"
-    ? "S 级拼写词"
-    : priority === "A"
-      ? "A 级重点词"
-      : priority === "B"
-        ? "B 级识别词"
-        : "C 级低频词";
+export function frequencyLabel(band, zipf) {
+  const safeBand = ["S", "A", "B", "C"].includes(band) ? band : "C";
+  const numericZipf = Number(zipf);
+  const hasScore = zipf !== null && zipf !== undefined && zipf !== "";
+  const score = hasScore && Number.isFinite(numericZipf) ? ` · ${numericZipf.toFixed(2)}` : "";
+
+  return `${safeBand} 级日常词频${score}`;
 }

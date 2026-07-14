@@ -4,7 +4,7 @@
 
 ## 当前数据结构
 
-- `data/wordbank.sqlite`：词库基线，随仓库提交，保存词条、中文解释、音标和本地音频索引。
+- `data/wordbank.sqlite`：词库基线，随仓库提交，保存词条、中文解释、音标、本地音频索引和 SUBTLEX-UK 日常词频。
 - `data/learning.sqlite`：学习记录库，不提交到仓库，保存进度和答题记录。服务启动时如果不存在会自动创建空库；线上部署时必须持久化保护。
 - `data/auth-config.json`：本地生成的登录密码哈希和 session 密钥，不提交到仓库。
 - `data/study-config.json`：学习配置，随仓库提交，控制哪些优先级进入默写。
@@ -54,12 +54,14 @@ PORT=4321 npm start
 npm run dev
 npm start
 npm run build:wordlist
+npm run import:frequency -- /path/to/SUBTLEX-UK.txt.zip
 npm run cache:offline
 ```
 
 - `npm run dev`：监听模式启动服务。
 - `npm start`：普通启动。
 - `npm run build:wordlist`：根据本地词表文件生成或刷新词表快照。
+- `npm run import:frequency`：把 SUBTLEX-UK 英国英语词频写入 `data/wordbank.sqlite`；单词使用原始词频，短语使用组成词估算。
 - `npm run cache:offline`：补齐中文释义、音标、音频和字体缓存，并写入 `data/wordbank.sqlite`。
 
 ## 登录配置
@@ -74,7 +76,7 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 
 如果没有设置，服务首次启动会自动生成 `data/auth-config.json`。
 
-默认默写等级配置保存在 `data/study-config.json`：
+词库中保存两套互不混用的等级：`frequency_band` 决定认词和听词顺序，原有 `priority` 决定是否进入默写。默认默写等级配置保存在 `data/study-config.json`：
 
 ```json
 {
@@ -82,11 +84,11 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 }
 ```
 
-如果暂时只想让 `S` 级词进入默写，可以改成：
+如果以后想扩大默写范围，可以加入 `A` 级：
 
 ```json
 {
-  "spellPriorityLevels": ["S"]
+  "spellPriorityLevels": ["S", "A"]
 }
 ```
 

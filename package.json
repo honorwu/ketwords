@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "build:wordlist": "node scripts/build-wordlist.js",
+    "import:frequency": "node scripts/import-word-frequency.js",
     "cache:offline": "node scripts/cache-offline-resources.js",
     "dev": "node --watch server.js",
     "start": "node server.js"
