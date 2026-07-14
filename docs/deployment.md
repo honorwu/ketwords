@@ -21,7 +21,7 @@ mkdir -p /srv
 cd /srv
 git clone <你的仓库地址> ketwords
 cd /srv/ketwords
-npm ci
+npm ci --omit=dev
 PORT=3210 npm start
 ```
 
@@ -122,7 +122,7 @@ cp data/learning.sqlite data/learning.sqlite.bak
 cp data/learning.sqlite-wal data/learning.sqlite-wal.bak 2>/dev/null || true
 cp data/learning.sqlite-shm data/learning.sqlite-shm.bak 2>/dev/null || true
 git pull
-npm ci
+npm ci --omit=dev
 sudo systemctl start ketwords
 ```
 

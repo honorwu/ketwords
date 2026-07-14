@@ -1,5 +1,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  cleanPartOfSpeech,
+  cleanWordTerm,
+  isNonSpellingParenthetical,
+  normalizeLookup,
+} = require("../lib/word-text");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
 const PDF_PATH = path.join(DATA_DIR, "a2-key-vocabulary-list.pdf");
@@ -397,29 +403,6 @@ const SPELLING_VARIANT_GROUPS = [
   ["maths", "math"],
 ];
 
-const FALLBACK_TERMS = [
-  { term: "apple", pos: "n" },
-  { term: "book", pos: "n" },
-  { term: "brother", pos: "n" },
-  { term: "cat", pos: "n" },
-  { term: "classroom", pos: "n" },
-  { term: "dog", pos: "n" },
-  { term: "eat", pos: "v" },
-  { term: "friend", pos: "n" },
-  { term: "happy", pos: "adj" },
-  { term: "home", pos: "n" },
-  { term: "juice", pos: "n" },
-  { term: "kitchen", pos: "n" },
-  { term: "listen", pos: "v" },
-  { term: "mother", pos: "n" },
-  { term: "pencil", pos: "n" },
-  { term: "play", pos: "v" },
-  { term: "rain", pos: "n & v" },
-  { term: "school", pos: "n" },
-  { term: "teacher", pos: "n" },
-  { term: "write", pos: "v" },
-];
-
 const NORMALIZED_THEME_TERMS = Object.fromEntries(
   Object.entries(THEME_TERMS).map(([theme, values]) => [
     theme,
@@ -428,51 +411,7 @@ const NORMALIZED_THEME_TERMS = Object.fromEntries(
 );
 
 const SPELLING_VARIANT_MAP = buildVariantMap(SPELLING_VARIANT_GROUPS);
-const NON_SPELLING_PARENTHETICALS = new Set([
-  "adj",
-  "adv",
-  "am eng",
-  "br eng",
-  "cm",
-  "computer",
-  "drawing",
-  "entertain",
-  "entertainment",
-  "km",
-  "music",
-  "n",
-  "not artificial",
-  "planning",
-  "process",
-  "social media",
-  "stylish",
-  "clever",
-  "technology",
-  "tv",
-  "v",
-  "transitive and intransitive",
-]);
-const PART_OF_SPEECH_LABELS = new Set([
-  "adj",
-  "adv",
-  "av",
-  "conj",
-  "det",
-  "mv",
-  "n",
-  "prep",
-  "pron",
-  "v",
-]);
-const REGION_LABELS = new Set(["am", "br", "am eng", "br eng"]);
 const SHORT_OPTIONAL_LETTER_MAX_LENGTH = 2;
-const PART_OF_SPEECH_TOKEN_LABELS = new Set([
-  ...PART_OF_SPEECH_LABELS,
-  "exclam",
-  "phr",
-  "pl",
-  "unc",
-]);
 
 function buildVariantMap(groups) {
   const map = new Map();
@@ -487,156 +426,6 @@ function buildVariantMap(groups) {
   }
 
   return map;
-}
-
-function normalizeLookup(text) {
-  return String(text || "")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9@/\s-]/g, "")
-    .replace(/[-/]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function normalizeCompact(text) {
-  return normalizeLookup(text).replace(/\s+/g, "");
-}
-
-function cleanSpaces(text) {
-  return String(text || "").replace(/\s+/g, " ").trim();
-}
-
-function parentheticalLabel(value) {
-  return normalizeLookup(value).replace(/\s+/g, " ");
-}
-
-function isDictionaryLabel(value) {
-  const label = parentheticalLabel(value);
-
-  if (!label) {
-    return false;
-  }
-
-  if (
-    NON_SPELLING_PARENTHETICALS.has(label) ||
-    PART_OF_SPEECH_LABELS.has(label) ||
-    REGION_LABELS.has(label)
-  ) {
-    return true;
-  }
-
-  const compact = label.replace(/\s+/g, "");
-  if (compact === "ameng" || compact === "breng") {
-    return true;
-  }
-
-  const parts = label.split(/\s*&\s*|\s+and\s+|\s+/).map((part) => part.trim());
-  return parts.length > 0 && parts.every((part) =>
-    PART_OF_SPEECH_LABELS.has(part) || REGION_LABELS.has(part) || part === "eng"
-  );
-}
-
-function isPartOfSpeechLabel(value) {
-  const label = parentheticalLabel(value);
-  const tokens = label
-    .split(/\s*&\s*|\s+and\s+|\s+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  return tokens.length > 0 && tokens.every((token) =>
-    PART_OF_SPEECH_TOKEN_LABELS.has(token)
-  );
-}
-
-function extractPartOfSpeechFromTerm(term) {
-  const matches = String(term || "").matchAll(/[\uFF08(]([^()\uFF08\uFF09]+)[\uFF09)]/g);
-
-  for (const match of matches) {
-    if (isPartOfSpeechLabel(match[1])) {
-      return cleanSpaces(match[1].toLowerCase());
-    }
-  }
-
-  return "";
-}
-
-function cleanPartOfSpeech(partOfSpeech, term = "") {
-  const termPartOfSpeech = extractPartOfSpeechFromTerm(term);
-
-  if (termPartOfSpeech) {
-    return termPartOfSpeech;
-  }
-
-  const cleaned = String(partOfSpeech || "")
-    .replace(/\b(?:am|br)\s+eng:?.*$/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!cleaned || REGION_LABELS.has(parentheticalLabel(cleaned))) {
-    return "unknown";
-  }
-
-  return cleaned;
-}
-
-function isNonSpellingParenthetical(value) {
-  const label = parentheticalLabel(value);
-
-  if (isDictionaryLabel(value)) {
-    return true;
-  }
-
-  const parts = label.split(/\s*&\s*|\s+and\s+/).map((part) => part.trim());
-  if (parts.length > 0 && parts.every((part) => PART_OF_SPEECH_LABELS.has(part))) {
-    return true;
-  }
-
-  const tokens = label.split(/\s+/).filter(Boolean);
-  return tokens.length > 0 && tokens.every((token) => PART_OF_SPEECH_LABELS.has(token));
-}
-
-function stripBareTrailingLabels(text) {
-  let next = cleanSpaces(text);
-
-  while (true) {
-    const stripped = next
-      .replace(/\b(?:am|br)\s+eng$/i, "")
-      .replace(/\b(?:adj|adv|av|conj|det|mv|n|prep|pron|v)$/i, "")
-      .trim();
-
-    if (stripped === next) {
-      return next;
-    }
-
-    next = stripped;
-  }
-}
-
-function stripParentheticalSegments(text, { labelsOnly = false } = {}) {
-  return String(text || "").replace(/\s*[\uFF08(]([^()\uFF08\uFF09]+)[\uFF09)]\s*/g, (match, inner) => {
-    if (labelsOnly && !isDictionaryLabel(inner)) {
-      return match;
-    }
-
-    return "";
-  });
-}
-
-function cleanWordTerm(term) {
-  return stripBareTrailingLabels(stripParentheticalSegments(term))
-    .replace(/\s+([/?])/g, "$1")
-    .replace(/([/?])\s+/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function cleanChineseMeaning(meaning) {
-  return stripParentheticalSegments(meaning, { labelsOnly: true })
-    .replace(/\s+([;；,，、])/g, "$1")
-    .replace(/([;；,，、])\s+/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function expandInlineOptionalLetters(term) {
@@ -844,19 +633,6 @@ async function parseCambridgePdf(pdfPath = PDF_PATH) {
   return ensureUniqueNormalizedTerms(entries.map(buildWordRecord));
 }
 
-function buildFallbackWordlist() {
-  return ensureUniqueNormalizedTerms(FALLBACK_TERMS.map((entry, index) =>
-    buildWordRecord(
-      {
-        term: entry.term,
-        pos: entry.pos,
-        examples: [],
-      },
-      index
-    )
-  ));
-}
-
 async function ensureWordlistJson() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -868,30 +644,22 @@ async function ensureWordlistJson() {
     }
   }
 
-  try {
-    if (!fs.existsSync(PDF_PATH)) {
-      throw new Error(`Local vocabulary PDF not found: ${PDF_PATH}`);
-    }
-
-    const wordlist = await parseCambridgePdf(PDF_PATH);
-    fs.writeFileSync(WORDLIST_PATH, JSON.stringify(wordlist, null, 2), "utf8");
-    return wordlist;
-  } catch (error) {
-    const fallback = buildFallbackWordlist();
-    fs.writeFileSync(WORDLIST_PATH, JSON.stringify(fallback, null, 2), "utf8");
-    return fallback;
+  if (!fs.existsSync(PDF_PATH)) {
+    throw new Error(`Local vocabulary PDF not found: ${PDF_PATH}`);
   }
+
+  const wordlist = await parseCambridgePdf(PDF_PATH);
+
+  if (wordlist.length <= 100) {
+    throw new Error(`Parsed vocabulary list is unexpectedly small: ${wordlist.length} entries`);
+  }
+
+  fs.writeFileSync(WORDLIST_PATH, JSON.stringify(wordlist, null, 2), "utf8");
+  return wordlist;
 }
 
 module.exports = {
   PDF_PATH,
   WORDLIST_PATH,
-  cleanChineseMeaning,
-  cleanPartOfSpeech,
-  cleanWordTerm,
   ensureWordlistJson,
-  buildSpellingCandidates,
-  parseAcceptedSpellings,
-  normalizeCompact,
-  normalizeLookup,
 };

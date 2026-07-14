@@ -2,7 +2,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
 const { execFileSync } = require("node:child_process");
-const { ensureWordlistJson } = require("./lib/wordlist");
 const { createStore } = require("./lib/store");
 const { createAuth } = require("./lib/auth");
 const { createBackupScheduler } = require("./lib/backup-scheduler");
@@ -295,8 +294,7 @@ async function bootstrap() {
   buildCard = createCardBuilder(store);
 
   if (store.getWordCount() === 0) {
-    const words = await ensureWordlistJson();
-    store.syncWords(words);
+    throw new Error("Word bank database is empty; rebuild data/wordbank.sqlite before starting the service.");
   }
 
   createBackupScheduler(store, {

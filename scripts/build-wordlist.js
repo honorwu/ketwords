@@ -1,4 +1,4 @@
-const { ensureWordlistJson, WORDLIST_PATH } = require("../lib/wordlist");
+const { ensureWordlistJson, WORDLIST_PATH } = require("./wordlist-builder");
 
 async function main() {
   const words = await ensureWordlistJson();

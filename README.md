@@ -34,7 +34,7 @@
 ## 快速启动
 
 ```bash
-npm ci
+npm ci --omit=dev
 npm start
 ```
 
@@ -61,9 +61,11 @@ npm run cache:offline
 
 - `npm run dev`：监听模式启动服务。
 - `npm start`：普通启动。
-- `npm run build:wordlist`：根据本地词表文件生成或刷新词表快照。
+- `npm run build:wordlist`：开发时根据本地 PDF 生成或刷新词表快照，需要先执行完整的 `npm ci`。
 - `npm run import:frequency`：把 SUBTLEX-UK 英国英语词频写入 `data/wordbank.sqlite`；单词使用原始词频，短语使用组成词估算。
 - `npm run cache:offline`：补齐中文释义、音标、音频和字体缓存，并写入 `data/wordbank.sqlite`。
+
+正常启动只读取已提交的 `data/wordbank.sqlite`，不解析 PDF，也没有第三方运行依赖。词库缺失或为空时服务会直接报错，避免用不完整的备用词表继续运行。
 
 ## 登录配置
 

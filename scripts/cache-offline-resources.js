@@ -1,4 +1,4 @@
-const { ensureWordlistJson } = require("../lib/wordlist");
+const { ensureWordlistJson } = require("./wordlist-builder");
 const { createStore } = require("../lib/store");
 const { cacheFonts, ensureWordOfflineData, hasLocalAudio } = require("../lib/offline-cache");
 
