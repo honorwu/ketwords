@@ -39,22 +39,6 @@ function normalizeLookup(value) {
     .replace(/\s+/g, " ");
 }
 
-function getFrequencyBand(zipf) {
-  if (zipf >= 5.5) {
-    return "S";
-  }
-
-  if (zipf >= 5) {
-    return "A";
-  }
-
-  if (zipf >= 4) {
-    return "B";
-  }
-
-  return "C";
-}
-
 function readSubtlexSource(sourcePath) {
   if (!fs.existsSync(sourcePath)) {
     throw new Error(
@@ -191,9 +175,9 @@ function ensureFrequencyColumns(db) {
   addColumnIfMissing(db, "words", "frequency_zipf REAL");
   addColumnIfMissing(db, "words", "child_frequency_zipf REAL");
   addColumnIfMissing(db, "words", "frequency_score REAL");
-  addColumnIfMissing(db, "words", "frequency_band TEXT");
   addColumnIfMissing(db, "words", "frequency_source TEXT");
   dropColumnIfExists(db, "words", "priority");
+  dropColumnIfExists(db, "words", "frequency_band");
 }
 
 function main() {
@@ -208,7 +192,6 @@ function main() {
     SET frequency_zipf = ?,
         child_frequency_zipf = ?,
         frequency_score = ?,
-        frequency_band = ?,
         frequency_source = ?
     WHERE id = ?
   `);
@@ -219,10 +202,6 @@ function main() {
     "manual-modern-estimate": 0,
     "manual-sense-estimate": 0,
     "fallback-low-estimate": 0,
-    S: 0,
-    A: 0,
-    B: 0,
-    C: 0,
   };
 
   db.exec("BEGIN");
@@ -235,11 +214,9 @@ function main() {
         ? roundFrequency(frequency.childZipf)
         : null;
       const frequencyScore = roundFrequency(zipf * 0.8 + (childZipf ?? zipf) * 0.2);
-      const band = getFrequencyBand(zipf);
 
-      update.run(zipf, childZipf, frequencyScore, band, frequency.source, word.id);
+      update.run(zipf, childZipf, frequencyScore, frequency.source, word.id);
       summary[frequency.source] += 1;
-      summary[band] += 1;
     }
 
     db.exec("COMMIT");

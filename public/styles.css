@@ -632,18 +632,11 @@ input {
   font-size: 0.92rem;
 }
 
-.badge.frequency-s {
+.badge.frequency-score {
   background: rgba(255, 125, 77, 0.14);
   color: var(--primary-dark);
 }
 
-.badge.frequency-a {
-  background: rgba(79, 176, 163, 0.14);
-  color: #24776b;
-}
-
-.badge.frequency-b,
-.badge.frequency-c,
 .badge.badge-neutral {
   background: rgba(133, 184, 255, 0.14);
   color: #3565b8;

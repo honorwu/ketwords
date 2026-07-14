@@ -7,12 +7,12 @@
 - `data/wordbank.sqlite`：词库基线，随仓库提交，保存词条、中文解释、音标、本地音频索引和 SUBTLEX-UK 日常词频。
 - `data/learning.sqlite`：学习记录库，不提交到仓库，保存进度和答题记录。服务启动时如果不存在会自动创建空库；线上部署时必须持久化保护。
 - `data/auth-config.json`：本地生成的登录密码哈希和 session 密钥，不提交到仓库。
-- `data/study-config.json`：学习配置，随仓库提交，控制哪些优先级进入默写。
+- `data/study-config.json`：学习配置，随仓库提交，控制进入默写的最低词频分数。
 - `data/backups/`：自动每日备份目录，不提交到仓库。
 - `public/audio/`、`public/assets/fonts/`、`public/fonts.css`：离线音频和字体资源，随仓库提交。
 
 `wordbank.sqlite` 只保存词条数据，不保存认词、听词、默写等学习策略。
-每个词的 `frequency_zipf`、`child_frequency_zipf`、`frequency_score`、`frequency_band` 和 `frequency_source` 都已固定写入该数据库；服务运行时只读取这些值，不会实时计算词频。
+每个词的 `frequency_zipf`、`child_frequency_zipf`、`frequency_score` 和 `frequency_source` 都已固定写入该数据库；服务运行时只读取这些值，不会实时计算词频。学习顺序只使用综合后的 `frequency_score`。
 
 旧的 `data/ketwords.sqlite` 已经废弃，不再参与运行。
 
@@ -77,24 +77,24 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 
 如果没有设置，服务首次启动会自动生成 `data/auth-config.json`。
 
-系统只使用一套词频等级：`frequency_band` 决定认词、听词和拼写顺序。默认只有最高频的 `S` 级单词进入拼写，配置保存在 `data/study-config.json`：
+系统只使用一套数值词频：`frequency_score` 决定认词、听词和拼写顺序，不再使用 S/A/B/C 档位。默认日常词频分数不低于 `5.5` 的单词进入拼写，配置保存在 `data/study-config.json`：
 
 ```json
 {
-  "spellFrequencyBands": ["S"]
+  "spellFrequencyMinScore": 5.5
 }
 ```
 
-如果以后想扩大默写范围，可以加入词频 `A` 级：
+如果以后想扩大默写范围，可以降低分数线：
 
 ```json
 {
-  "spellFrequencyBands": ["S", "A"]
+  "spellFrequencyMinScore": 5.0
 }
 ```
 
 这不会清空已有学习进度。
-所有词都会进入认词和听词；`spellFrequencyBands` 只控制哪些词频等级有资格进入默写。默写只使用清洗后的单个英文词：包含空格、短划线、句点等符号的词组不会进入默写，括号里的词性、英美标记和可选补充也不会作为默写内容。
+所有词都会进入认词和听词；`spellFrequencyMinScore` 只控制哪些词有资格进入默写。默写只使用清洗后的单个英文词：包含空格、短划线、句点等符号的词组不会进入默写，括号里的词性、英美标记和可选补充也不会作为默写内容。
 
 ## 版本管理建议
 

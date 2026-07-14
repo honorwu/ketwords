@@ -1,5 +1,3 @@
 {
-  "spellFrequencyBands": [
-    "S"
-  ]
+  "spellFrequencyMinScore": 5.5
 }

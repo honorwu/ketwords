@@ -75,11 +75,7 @@ export function formatPartOfSpeechLabel(partOfSpeech) {
     .join(" + ");
 }
 
-export function frequencyLabel(band, zipf) {
-  const safeBand = ["S", "A", "B", "C"].includes(band) ? band : "C";
-  const numericZipf = Number(zipf);
-  const hasScore = zipf !== null && zipf !== undefined && zipf !== "";
-  const score = hasScore && Number.isFinite(numericZipf) ? ` · ${numericZipf.toFixed(2)}` : "";
-
-  return `${safeBand} 级日常词频${score}`;
+export function frequencyLabel(frequencyScore) {
+  const score = Number(frequencyScore);
+  return Number.isFinite(score) ? `日常词频 ${score.toFixed(2)}` : "暂无词频";
 }

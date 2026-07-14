@@ -384,7 +384,7 @@ async function loadCheckinMonth(offset) {
 
 function renderProgress() {
   const { progress, plan, config } = state.overview;
-  const spellLevels = (config?.spellFrequencyBands || ["S"]).join(" + ");
+  const spellMinScore = Number(config?.spellFrequencyMinScore ?? 5.5).toFixed(2);
 
   progressPanel.innerHTML = `
     <h2>学习进度</h2>
@@ -418,7 +418,7 @@ function renderProgress() {
         <div class="bar"><div class="bar-fill" style="width:${formatPercent(progress.spellMastered, progress.spellGoalCount)}"></div></div>
       </div>
     </div>
-    <p class="muted">总词库一共有 ${progress.totalWords} 个词。已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个学习阶段；认词和听词按全部词库统计，词频 ${spellLevels} 级会继续进入默写训练。</p>
+    <p class="muted">总词库一共有 ${progress.totalWords} 个词。已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个学习阶段；认词和听词按全部词库统计，日常词频不低于 ${spellMinScore} 的单词会继续进入默写训练。</p>
   `;
 }
 
@@ -591,7 +591,7 @@ function renderParentWordPanel() {
                         <strong>${escapeHtml(item.term)}</strong>
                         <div class="word-meta">${escapeHtml(item.meaning || "中文会在学习时逐步补全")}</div>
                       </div>
-                      <div>${escapeHtml(frequencyLabel(item.frequencyBand, item.frequencyZipf))}</div>
+                      <div>${escapeHtml(frequencyLabel(item.frequencyScore))}</div>
                       <div>
                         <div>${item.masteryPercent}% · ${escapeHtml(item.mastery)}</div>
                         <div class="tiny-bar"><div class="tiny-bar-fill" style="width:${item.masteryPercent}%"></div></div>
@@ -849,10 +849,6 @@ function renderCard(card) {
       : card.mode === "spell"
         ? card.chineseMeaning
         : card.term;
-  const frequencyClass = String(card.frequencyBand || "C")
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, "");
-
   const phoneticLine =
     card.mode === "spell"
       ? ""
@@ -916,7 +912,7 @@ function renderCard(card) {
       <div class="card-top">
         <div>
           <div class="badge-row">
-            <span class="badge frequency-${frequencyClass}">${escapeHtml(frequencyLabel(card.frequencyBand, card.frequencyZipf))}</span>
+            <span class="badge frequency-score">${escapeHtml(frequencyLabel(card.frequencyScore))}</span>
             <span class="badge badge-neutral">${escapeHtml(card.theme)}</span>
             <span class="badge badge-neutral">${formatPartOfSpeechLabel(card.partOfSpeech)}</span>
             <span class="badge badge-neutral">${escapeHtml(card.prompt)}</span>
