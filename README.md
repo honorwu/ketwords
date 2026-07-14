@@ -77,15 +77,40 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 
 如果没有设置，服务首次启动会自动生成 `data/auth-config.json`。
 
-系统只使用一套数值词频：`frequency_score` 决定认词、听词和拼写顺序，不再使用 S/A/B/C 档位。默认日常词频分数不低于 `5.5` 的单词进入拼写，配置保存在 `data/study-config.json`：
+系统只使用一套数值词频：`frequency_score` 决定认词、听词和拼写顺序，不再使用 S/A/B/C 档位。考试日期、每日目标、加练节奏、错题等待时间和拼写分数线都集中保存在 `data/study-config.json`：
 
 ```json
 {
+  "examDate": "2026-08-22",
+  "prepStartDate": "2026-04-22",
+  "dailyTargets": {
+    "recognize": 60,
+    "listen": 20,
+    "spell": 10
+  },
+  "afterTargetSequence": [
+    "recognize", "recognize", "recognize", "recognize", "recognize", "recognize",
+    "listen", "listen", "spell"
+  ],
+  "wrongParkDays": {
+    "recognize": 3,
+    "listen": 3,
+    "spell": 7
+  },
+  "dailyWrongRetryLimits": {
+    "recognize": 6,
+    "listen": 4,
+    "spell": 3
+  },
   "spellFrequencyMinScore": 5.5
 }
 ```
 
-如果以后想扩大默写范围，可以降低分数线：
+完成每日 `60/20/10` 后，系统按 `6 个认词、2 个听词、1 个拼写` 的节奏继续加练。当天认过的词不会在当天进入听词，当天认过或听过的词不会在当天进入拼写。
+
+当前冲刺阶段会把未接触词排在到期复习词和错词之前，以便尽快完成全词库筛查。认词或听词答错后等待 3 天再出现，拼写答错后等待 7 天；每日重新进入队列的错词数量分别最多为 6、4、3 个。
+
+如果以后想扩大默写范围，只需要降低 `spellFrequencyMinScore`：
 
 ```json
 {

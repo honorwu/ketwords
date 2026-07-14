@@ -1,3 +1,31 @@
 {
+  "examDate": "2026-08-22",
+  "prepStartDate": "2026-04-22",
+  "dailyTargets": {
+    "recognize": 60,
+    "listen": 20,
+    "spell": 10
+  },
+  "afterTargetSequence": [
+    "recognize",
+    "recognize",
+    "recognize",
+    "recognize",
+    "recognize",
+    "recognize",
+    "listen",
+    "listen",
+    "spell"
+  ],
+  "wrongParkDays": {
+    "recognize": 3,
+    "listen": 3,
+    "spell": 7
+  },
+  "dailyWrongRetryLimits": {
+    "recognize": 6,
+    "listen": 4,
+    "spell": 3
+  },
   "spellFrequencyMinScore": 5.5
 }

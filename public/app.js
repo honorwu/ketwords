@@ -254,7 +254,8 @@ function applyLocalStudyAttempt(mode, previousToday) {
 }
 
 function renderHero() {
-  const { exam, plan, checkin, progress, today } = state.overview;
+  const { exam, checkin, config, progress, today } = state.overview;
+  const targets = config.dailyTargets;
   const leadingBlanks = Array.from({ length: checkin.firstWeekday }, () => null);
   const monthCells = [...leadingBlanks, ...checkin.monthDays];
 
@@ -274,9 +275,9 @@ function renderHero() {
           <div class="hero-metric">
             <div class="metric-label">今天进度</div>
             <div class="today-targets">
-              <span><strong>${today.recognizeCards}/${plan.dailyTargets.recognize}</strong> 认</span>
-              <span><strong>${today.listenCards}/${plan.dailyTargets.listen}</strong> 听</span>
-              <span><strong>${today.spellCards}/${plan.dailyTargets.spell}</strong> 拼</span>
+              <span><strong>${today.recognizeCards}/${targets.recognize}</strong> 认</span>
+              <span><strong>${today.listenCards}/${targets.listen}</strong> 听</span>
+              <span><strong>${today.spellCards}/${targets.spell}</strong> 拼</span>
             </div>
           </div>
           <div class="hero-metric">
@@ -383,8 +384,8 @@ async function loadCheckinMonth(offset) {
 }
 
 function renderProgress() {
-  const { progress, plan, config } = state.overview;
-  const spellMinScore = Number(config?.spellFrequencyMinScore ?? 5.5).toFixed(2);
+  const { progress, config } = state.overview;
+  const spellMinScore = Number(config.spellFrequencyMinScore).toFixed(2);
 
   progressPanel.innerHTML = `
     <h2>学习进度</h2>
@@ -623,11 +624,7 @@ function renderStudyPlanMini() {
   }
 
   const today = getStudyDisplayToday();
-  const targets = state.overview.plan?.dailyTargets || {
-    recognize: 50,
-    listen: 40,
-    spell: 30,
-  };
+  const targets = state.overview.config.dailyTargets;
 
   studyPlanMini.className = "study-plan-mini";
   studyPlanMini.innerHTML = `
