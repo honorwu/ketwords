@@ -2,7 +2,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
-const { addColumnIfMissing, createWordSchema } = require("../lib/store-schema");
+const {
+  addColumnIfMissing,
+  createWordSchema,
+  dropColumnIfExists,
+} = require("../lib/store-schema");
 
 const ROOT_DIR = path.join(__dirname, "..");
 const WORD_BANK_PATH = path.join(ROOT_DIR, "data", "wordbank.sqlite");
@@ -189,6 +193,7 @@ function ensureFrequencyColumns(db) {
   addColumnIfMissing(db, "words", "frequency_score REAL");
   addColumnIfMissing(db, "words", "frequency_band TEXT");
   addColumnIfMissing(db, "words", "frequency_source TEXT");
+  dropColumnIfExists(db, "words", "priority");
 }
 
 function main() {

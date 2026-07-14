@@ -384,7 +384,7 @@ async function loadCheckinMonth(offset) {
 
 function renderProgress() {
   const { progress, plan, config } = state.overview;
-  const spellLevels = (config?.spellPriorityLevels || ["S", "A"]).join(" + ");
+  const spellLevels = (config?.spellFrequencyBands || ["S"]).join(" + ");
 
   progressPanel.innerHTML = `
     <h2>学习进度</h2>
@@ -418,7 +418,7 @@ function renderProgress() {
         <div class="bar"><div class="bar-fill" style="width:${formatPercent(progress.spellMastered, progress.spellGoalCount)}"></div></div>
       </div>
     </div>
-    <p class="muted">总词库一共有 ${progress.totalWords} 个词。已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个学习阶段；认词和听词按全部词库统计，${spellLevels} 级会继续进入默写训练。</p>
+    <p class="muted">总词库一共有 ${progress.totalWords} 个词。已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个学习阶段；认词和听词按全部词库统计，词频 ${spellLevels} 级会继续进入默写训练。</p>
   `;
 }
 
@@ -849,7 +849,7 @@ function renderCard(card) {
       : card.mode === "spell"
         ? card.chineseMeaning
         : card.term;
-  const priorityClass = String(card.frequencyBand || "C")
+  const frequencyClass = String(card.frequencyBand || "C")
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, "");
 
@@ -916,10 +916,10 @@ function renderCard(card) {
       <div class="card-top">
         <div>
           <div class="badge-row">
-            <span class="badge priority-${priorityClass}">${escapeHtml(frequencyLabel(card.frequencyBand, card.frequencyZipf))}</span>
-            <span class="badge priority-b">${escapeHtml(card.theme)}</span>
-            <span class="badge priority-c">${formatPartOfSpeechLabel(card.partOfSpeech)}</span>
-            <span class="badge priority-c">${escapeHtml(card.prompt)}</span>
+            <span class="badge frequency-${frequencyClass}">${escapeHtml(frequencyLabel(card.frequencyBand, card.frequencyZipf))}</span>
+            <span class="badge badge-neutral">${escapeHtml(card.theme)}</span>
+            <span class="badge badge-neutral">${formatPartOfSpeechLabel(card.partOfSpeech)}</span>
+            <span class="badge badge-neutral">${escapeHtml(card.prompt)}</span>
           </div>
           <div class="prompt-title">${escapeHtml(promptTitle)}</div>
           ${phoneticLine}

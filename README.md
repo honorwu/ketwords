@@ -12,6 +12,7 @@
 - `public/audio/`、`public/assets/fonts/`、`public/fonts.css`：离线音频和字体资源，随仓库提交。
 
 `wordbank.sqlite` 只保存词条数据，不保存认词、听词、默写等学习策略。
+每个词的 `frequency_zipf`、`child_frequency_zipf`、`frequency_score`、`frequency_band` 和 `frequency_source` 都已固定写入该数据库；服务运行时只读取这些值，不会实时计算词频。
 
 旧的 `data/ketwords.sqlite` 已经废弃，不再参与运行。
 
@@ -76,24 +77,24 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 
 如果没有设置，服务首次启动会自动生成 `data/auth-config.json`。
 
-词库中保存两套互不混用的等级：`frequency_band` 决定认词和听词顺序，原有 `priority` 决定是否进入默写。默认默写等级配置保存在 `data/study-config.json`：
+系统只使用一套词频等级：`frequency_band` 决定认词、听词和拼写顺序。默认只有最高频的 `S` 级单词进入拼写，配置保存在 `data/study-config.json`：
 
 ```json
 {
-  "spellPriorityLevels": ["S", "A", "B"]
+  "spellFrequencyBands": ["S"]
 }
 ```
 
-如果以后想扩大默写范围，可以加入 `A` 级：
+如果以后想扩大默写范围，可以加入词频 `A` 级：
 
 ```json
 {
-  "spellPriorityLevels": ["S", "A"]
+  "spellFrequencyBands": ["S", "A"]
 }
 ```
 
 这不会清空已有学习进度。
-所有词都会进入认词和听词；`spellPriorityLevels` 只控制哪些优先级有资格进入默写。默写只使用清洗后的单个英文词：包含空格、短划线、句点等符号的词组不会进入默写，括号里的词性、英美标记和可选补充也不会作为默写内容。
+所有词都会进入认词和听词；`spellFrequencyBands` 只控制哪些词频等级有资格进入默写。默写只使用清洗后的单个英文词：包含空格、短划线、句点等符号的词组不会进入默写，括号里的词性、英美标记和可选补充也不会作为默写内容。
 
 ## 版本管理建议
 
