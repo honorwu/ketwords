@@ -57,6 +57,7 @@ npm start
 npm run build:wordlist
 npm run import:frequency -- /path/to/SUBTLEX-UK.txt.zip
 npm run cache:offline
+npm test
 ```
 
 - `npm run dev`：监听模式启动服务。
@@ -64,6 +65,7 @@ npm run cache:offline
 - `npm run build:wordlist`：开发时根据本地 PDF 生成或刷新词表快照，需要先执行完整的 `npm ci`。
 - `npm run import:frequency`：把 SUBTLEX-UK 英国英语词频写入 `data/wordbank.sqlite`；单词使用原始词频，短语使用组成词估算。
 - `npm run cache:offline`：补齐中文释义、音标、音频和字体缓存，并写入 `data/wordbank.sqlite`。
+- `npm test`：使用 Node.js 内置测试检查学习规则、旧记录迁移和词库资源完整性，不引入额外测试依赖。
 
 正常启动只读取已提交的 `data/wordbank.sqlite`，不解析 PDF，也没有第三方运行依赖。词库缺失或为空时服务会直接报错，避免用不完整的备用词表继续运行。
 
@@ -122,6 +124,8 @@ KET_SESSION_SECRET=一段足够长的随机字符串
 
 这不会清空已有学习进度。
 所有词都会进入认词和听词；`spellFrequencyMinScore` 只控制哪些词有资格进入默写。默写只使用清洗后的单个英文词：包含空格、短划线、句点等符号的词组不会进入默写，括号里的词性、英美标记和可选补充也不会作为默写内容。
+
+词表中的同形词如果代表不同词性或义项，会保留为独立学习条目，例如 `train` 的“火车”和“训练”。这类条目不是重复数据，孩子需要分别识别对应含义。旧版学习记录中的 `word_key` 会在启动时按当前词库自动规范化，之后只使用稳定的词条 key 关联进度。
 
 ## 版本管理建议
 
