@@ -432,7 +432,7 @@ function renderProgress() {
         <div class="bar"><div class="bar-fill" style="width:${formatPercent(progress.spellMastered, progress.spellGoalCount)}"></div></div>
       </div>
     </div>
-    <p class="muted">总词库一共有 ${progress.totalWords} 个词。已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个学习阶段；所有词都练认词和听词，纯字母或数字的单个词继续进入拼写，含空格、短划线、点等符号的词组不拼写。</p>
+    <p class="muted">总词库一共有 ${progress.totalWords} 个词。已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个学习阶段；任务按认词、听词、拼写排序，同一个词每天只出现一次。纯字母或数字的单个词需要拼写，含空格、短划线、点等符号的词组不拼写。</p>
   `;
 }
 

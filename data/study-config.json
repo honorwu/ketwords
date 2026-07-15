@@ -20,7 +20,7 @@
   "wrongParkDays": {
     "recognize": 1,
     "listen": 1,
-    "spell": 0
+    "spell": 1
   },
   "repeatedWrongThreshold": 3
 }
