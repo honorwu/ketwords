@@ -683,6 +683,10 @@ function renderParentWordPanel({
                 const statusLabel = WORD_MAP_STATUS_LABELS[item.mapStatus] || item.mastery;
                 const repeatedLabel = item.repeatedWrong ? `，反复错词，累计错 ${item.timesWrong} 次` : "";
                 const isSelected = Number(item.wordId) === Number(state.parentWordSelectedId);
+                const frequencyScore = Number(item.frequencyScore);
+                const hoverFrequencyLabel = Number.isFinite(frequencyScore)
+                  ? `词频 ${frequencyScore.toFixed(2)}`
+                  : "暂无词频";
 
                 return `
                   <button
@@ -690,9 +694,9 @@ function renderParentWordPanel({
                     role="listitem"
                     class="word-map-cell status-${item.mapStatus}${item.repeatedWrong ? " is-repeated-wrong" : ""}${isSelected ? " is-selected" : ""}"
                     data-word-id="${item.wordId}"
-                    data-word-label="${escapeHtml(item.term)}"
+                    data-word-label="${escapeHtml(`${item.term} · ${hoverFrequencyLabel}`)}"
                     aria-pressed="${isSelected}"
-                    aria-label="${escapeHtml(`${item.term}，${statusLabel}${repeatedLabel}，${item.meaning || "暂无中文释义"}`)}"
+                    aria-label="${escapeHtml(`${item.term}，${hoverFrequencyLabel}，${statusLabel}${repeatedLabel}，${item.meaning || "暂无中文释义"}`)}"
                   ></button>
                 `;
               }).join("")}
