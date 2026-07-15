@@ -36,6 +36,37 @@ test("词库只保存数值词频并且资源引用完整", () => {
     HAVING COUNT(*) > 1
   `).all();
   assert.deepEqual(exactDuplicates, []);
+
+  const themes = db.prepare(`
+    SELECT theme, chinese_meaning
+    FROM words
+  `).all();
+  assert.deepEqual(
+    themes.filter((word) => !String(word.chinese_meaning || "").trim()),
+    [],
+    "每个单词都必须有固定中文释义"
+  );
+  const meaningsByTheme = new Map();
+
+  for (const word of themes) {
+    const meaning = String(word.chinese_meaning || "")
+      .normalize("NFKC")
+      .replace(/[；;、，,。./\s]+/g, "")
+      .trim();
+
+    if (!meaningsByTheme.has(word.theme)) {
+      meaningsByTheme.set(word.theme, new Set());
+    }
+
+    if (meaning) {
+      meaningsByTheme.get(word.theme).add(meaning);
+    }
+  }
+
+  for (const [theme, meanings] of meaningsByTheme) {
+    assert.ok(meanings.size >= 4, `${theme} 类别不足以提供 3 个不同释义的干扰项`);
+  }
+
   db.close();
 });
 
