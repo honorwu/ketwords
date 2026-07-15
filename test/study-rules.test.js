@@ -2,7 +2,11 @@ const assert = require("node:assert/strict");
 const { DatabaseSync } = require("node:sqlite");
 const test = require("node:test");
 const { normalizeStudyConfig } = require("../lib/study-config");
-const { getLearningTarget, isRepeatedWrong } = require("../lib/study-progress");
+const {
+  compareWordMapByFrequency,
+  getLearningTarget,
+  isRepeatedWrong,
+} = require("../lib/study-progress");
 const {
   getModeOrderForToday,
   getWordMapStatus,
@@ -61,6 +65,21 @@ test("累计错三次才标记为反复错词", () => {
 
   assert.equal(isRepeatedWrong({ timesWrong: 2 }, config), false);
   assert.equal(isRepeatedWrong({ timesWrong: 3 }, config), true);
+});
+
+test("家长掌握地图按词频降序稳定排列", () => {
+  const words = [
+    { term: "low", frequencyScore: 3.2, sourceOrder: 1 },
+    { term: "same-later", frequencyScore: 5.6, sourceOrder: 3 },
+    { term: "high", frequencyScore: 7.1, sourceOrder: 2 },
+    { term: "same-earlier", frequencyScore: 5.6, sourceOrder: 2 },
+  ];
+
+  words.sort(compareWordMapByFrequency);
+  assert.deepEqual(
+    words.map((word) => word.term),
+    ["high", "same-earlier", "same-later", "low"]
+  );
 });
 
 test("只有达到词频线的单个单词进入拼写", () => {

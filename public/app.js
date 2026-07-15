@@ -622,7 +622,7 @@ function renderParentWordPanel({
     <div class="word-map-toolbar">
       <div>
         <h2>词汇掌握地图</h2>
-        <div class="muted">每格一个词，底色表示当前阶段；右上角红点表示累计错 ${repeatedWrongThreshold} 次以上。</div>
+        <div class="muted">每格一个词，左上词频最高、向右向下递减；底色表示当前阶段，红点表示累计错 ${repeatedWrongThreshold} 次以上。</div>
       </div>
       <label class="word-search">
         <span class="visually-hidden">搜索单词</span>
@@ -671,7 +671,7 @@ function renderParentWordPanel({
     ` : ""}
     <div class="word-map-result-line" aria-live="polite">
       <strong>显示 ${filteredWords.length} / ${state.parentWords.length} 个词</strong>
-      <span>按词表顺序固定排列，筛选不会改变单词状态。</span>
+      <span>悬停看单词，点击看详情。</span>
     </div>
     ${
       state.parentWordsLoading
@@ -690,10 +690,10 @@ function renderParentWordPanel({
                     role="listitem"
                     class="word-map-cell status-${item.mapStatus}${item.repeatedWrong ? " is-repeated-wrong" : ""}${isSelected ? " is-selected" : ""}"
                     data-word-id="${item.wordId}"
+                    data-word-label="${escapeHtml(item.term)}"
                     aria-pressed="${isSelected}"
                     aria-label="${escapeHtml(`${item.term}，${statusLabel}${repeatedLabel}，${item.meaning || "暂无中文释义"}`)}"
-                    title="${escapeHtml(`${item.term} · ${statusLabel}${repeatedLabel}`)}"
-                  ><span>${escapeHtml(item.term)}</span></button>
+                  ></button>
                 `;
               }).join("")}
             </div>`
