@@ -1,7 +1,48 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createCardBuilder } = require("../lib/study-card");
-const { selectRandomDistractors } = require("../lib/store");
+const {
+  areDistractorWordsTooClose,
+  selectRandomDistractors,
+} = require("../lib/store");
+
+test("同词、双重包含和已确认近义词不会互为选项", () => {
+  assert.equal(
+    areDistractorWordsTooClose(
+      { term: "design", chineseMeaning: "设计" },
+      { term: "design", chineseMeaning: "设计（规划）" }
+    ),
+    true
+  );
+  assert.equal(
+    areDistractorWordsTooClose(
+      { term: "camera", chineseMeaning: "相机" },
+      { term: "digital camera", chineseMeaning: "数码相机" }
+    ),
+    true
+  );
+  assert.equal(
+    areDistractorWordsTooClose(
+      { term: "computer", chineseMeaning: "电脑" },
+      { term: "laptop", chineseMeaning: "笔记本电脑" }
+    ),
+    true
+  );
+  assert.equal(
+    areDistractorWordsTooClose(
+      { term: "maybe", chineseMeaning: "或许" },
+      { term: "perhaps", chineseMeaning: "也许" }
+    ),
+    true
+  );
+  assert.equal(
+    areDistractorWordsTooClose(
+      { term: "apple", chineseMeaning: "苹果" },
+      { term: "banana", chineseMeaning: "香蕉" }
+    ),
+    false
+  );
+});
 
 test("干扰项只从同主题随机抽取已有中文释义", () => {
   const candidate = {

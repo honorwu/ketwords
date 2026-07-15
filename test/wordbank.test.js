@@ -3,6 +3,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 const test = require("node:test");
+const {
+  areDistractorWordsTooClose,
+  selectRandomDistractors,
+} = require("../lib/store");
 
 const ROOT_DIR = path.join(__dirname, "..");
 const WORD_BANK_PATH = path.join(ROOT_DIR, "data", "wordbank.sqlite");
@@ -65,6 +69,37 @@ test("词库只保存数值词频并且资源引用完整", () => {
 
   for (const [theme, meanings] of meaningsByTheme) {
     assert.ok(meanings.size >= 4, `${theme} 类别不足以提供 3 个不同释义的干扰项`);
+  }
+
+  const distractorWords = db.prepare(`
+    SELECT
+      id AS wordId,
+      term,
+      base_term AS baseTerm,
+      theme,
+      chinese_meaning AS chineseMeaning
+    FROM words
+  `).all();
+
+  for (const candidate of distractorWords) {
+    let randomState = candidate.wordId;
+    const distractors = selectRandomDistractors(candidate, distractorWords, 3, () => {
+      randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0;
+      return randomState / 4294967296;
+    });
+    const options = [candidate, ...distractors];
+
+    assert.equal(distractors.length, 3, `${candidate.term} 无法生成 3 个安全干扰项`);
+
+    for (let leftIndex = 0; leftIndex < options.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < options.length; rightIndex += 1) {
+        assert.equal(
+          areDistractorWordsTooClose(options[leftIndex], options[rightIndex]),
+          false,
+          `${candidate.term} 的选项仍然过近：${options[leftIndex].term} / ${options[rightIndex].term}`
+        );
+      }
+    }
   }
 
   db.close();
