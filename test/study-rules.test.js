@@ -5,11 +5,17 @@ const { normalizeStudyConfig } = require("../lib/study-config");
 const {
   compareWordMapByFrequency,
   getLearningTarget,
+  getStageTargets,
   isRepeatedWrong,
 } = require("../lib/study-progress");
+const { applyResultToStages } = require("../lib/answer-evaluator");
 const {
+  getDeferredSpellRetryCandidates,
+  getEligibleModeCandidates,
   getModeOrderForToday,
+  getNextReviewAtAfterAnswer,
   getWordMapStatus,
+  isAvailableForModeToday,
   isParkedAfterWrong,
   sortStudyCandidates,
 } = require("../lib/study-selection");
@@ -24,12 +30,11 @@ test("学习配置统一提供每日目标和复习规则", () => {
     spell: 10,
   });
   assert.deepEqual(config.wrongParkDays, {
-    recognize: 3,
-    listen: 3,
-    spell: 7,
+    recognize: 1,
+    listen: 1,
+    spell: 0,
   });
   assert.equal(config.repeatedWrongThreshold, 3);
-  assert.equal(config.spellFrequencyMinScore, 5.5);
   assert.equal(config.afterTargetSequence.length, 9);
 });
 
@@ -54,9 +59,19 @@ test("家长掌握地图按当前学习阶段显示稳定状态", () => {
       ...base,
       recognitionStage: 1,
       listeningStage: 1,
-      spellingStage: 2,
+      spellingStage: 1,
     }),
     "mastered"
+  );
+  assert.equal(
+    getWordMapStatus({
+      ...base,
+      recognitionStage: 1,
+      listeningStage: 1,
+      lastMode: "spell",
+      lastResult: "wrong",
+    }),
+    "spell-retry"
   );
 });
 
@@ -82,12 +97,18 @@ test("家长掌握地图按词频降序稳定排列", () => {
   );
 });
 
-test("只有达到词频线的单个单词进入拼写", () => {
-  const config = normalizeStudyConfig({ spellFrequencyMinScore: 5.5 });
-
-  assert.equal(getLearningTarget({ baseTerm: "school", frequencyScore: 5.5 }, config), "spell");
-  assert.equal(getLearningTarget({ baseTerm: "mum", frequencyScore: 5.49 }, config), "listen");
-  assert.equal(getLearningTarget({ baseTerm: "a few", frequencyScore: 7 }, config), "listen");
+test("所有单个单词都拼写，含分隔符的词组不拼写", () => {
+  assert.equal(getLearningTarget({ baseTerm: "school", frequencyScore: 1 }), "spell");
+  assert.equal(getLearningTarget({ baseTerm: "mum", frequencyScore: null }), "spell");
+  assert.equal(getLearningTarget({ baseTerm: "A2" }), "spell");
+  assert.equal(getLearningTarget({ baseTerm: "a few" }), "listen");
+  assert.equal(getLearningTarget({ baseTerm: "part-time" }), "listen");
+  assert.equal(getLearningTarget({ baseTerm: "p.m." }), "listen");
+  assert.deepEqual(getStageTargets({ learningTarget: "spell" }), {
+    recognition: 1,
+    listening: 1,
+    spelling: 1,
+  });
 });
 
 test("学习队列先排未接触词，再按数值词频排序", () => {
@@ -111,7 +132,7 @@ test("每日目标完成后按 6:2:1 继续加练", () => {
   );
 });
 
-test("认词听词错题等待 3 天，拼写错题等待 7 天", () => {
+test("认词听词错题等待到第二天，拼写错题不按天停放", () => {
   const now = new Date("2026-07-14T12:00:00Z");
   const state = (mode, lastSeenAt) => ({
     lastResult: "wrong",
@@ -119,10 +140,132 @@ test("认词听词错题等待 3 天，拼写错题等待 7 天", () => {
     lastSeenAt,
   });
 
-  assert.equal(isParkedAfterWrong(state("recognize", "2026-07-12T12:00:00Z"), "recognize", now), true);
-  assert.equal(isParkedAfterWrong(state("listen", "2026-07-10T12:00:00Z"), "listen", now), false);
-  assert.equal(isParkedAfterWrong(state("spell", "2026-07-08T12:00:00Z"), "spell", now), true);
-  assert.equal(isParkedAfterWrong(state("spell", "2026-07-06T12:00:00Z"), "spell", now), false);
+  assert.equal(isParkedAfterWrong(state("recognize", "2026-07-14T00:00:00Z"), "recognize", now), true);
+  assert.equal(isParkedAfterWrong(state("listen", "2026-07-13T11:59:59Z"), "listen", now), false);
+  assert.equal(isParkedAfterWrong(state("spell", "2026-07-14T12:00:00Z"), "spell", now), false);
+});
+
+test("答题结果严格决定当前阶段是否通过", () => {
+  const state = {
+    recognitionStage: 0,
+    listeningStage: 0,
+    spellingStage: 0,
+  };
+
+  assert.equal(applyResultToStages(state, "recognize", "correct").recognitionStage, 1);
+  assert.equal(
+    applyResultToStages({ ...state, recognitionStage: 1 }, "recognize", "wrong")
+      .recognitionStage,
+    0
+  );
+  assert.equal(applyResultToStages(state, "listen", "correct").listeningStage, 1);
+  assert.equal(applyResultToStages(state, "spell", "correct").spellingStage, 1);
+});
+
+test("答对后当天可以进入下一阶段，但同一阶段当天不重复", () => {
+  const state = { normalizedTerm: "apple" };
+  const studied = {
+    recognize: new Set(["apple"]),
+    listen: new Set(),
+    spell: new Set(),
+  };
+
+  assert.equal(isAvailableForModeToday(state, "recognize", studied), false);
+  assert.equal(isAvailableForModeToday(state, "listen", studied), true);
+  assert.equal(isAvailableForModeToday(state, "spell", studied), true);
+});
+
+test("到期的认词听词错题排在普通候选项之前", () => {
+  const now = new Date("2026-07-15T12:00:00Z");
+  const studied = { recognize: new Set(), listen: new Set(), spell: new Set() };
+  const dueWrong = {
+    wordId: 1,
+    normalizedTerm: "wrong",
+    learningTarget: "spell",
+    firstSeenAt: "2026-07-13T00:00:00Z",
+    lastSeenAt: "2026-07-14T00:00:00Z",
+    nextReviewAt: "2026-07-15T00:00:00Z",
+    lastMode: "recognize",
+    lastResult: "wrong",
+    recognitionStage: 0,
+    listeningStage: 0,
+    spellingStage: 0,
+    frequencyScore: 1,
+    sourceOrder: 2,
+  };
+  const unseen = {
+    ...dueWrong,
+    wordId: 2,
+    normalizedTerm: "new",
+    firstSeenAt: null,
+    lastSeenAt: null,
+    nextReviewAt: null,
+    lastMode: null,
+    lastResult: null,
+    frequencyScore: 9,
+    sourceOrder: 1,
+  };
+
+  assert.deepEqual(
+    getEligibleModeCandidates([unseen, dueWrong], "recognize", now, studied).map(
+      (item) => item.normalizedTerm
+    ),
+    ["wrong", "new"]
+  );
+});
+
+test("拼写错词只在普通候选项清空后进入队尾重试", () => {
+  const now = new Date("2026-07-15T12:00:00Z");
+  const studied = { recognize: new Set(), listen: new Set(), spell: new Set() };
+  const wrong = {
+    wordId: 1,
+    normalizedTerm: "apple",
+    learningTarget: "spell",
+    firstSeenAt: "2026-07-14T00:00:00Z",
+    lastSeenAt: "2026-07-15T10:00:00Z",
+    nextReviewAt: "2026-07-15T10:00:00Z",
+    lastMode: "spell",
+    lastResult: "wrong",
+    recognitionStage: 1,
+    listeningStage: 1,
+    spellingStage: 0,
+    frequencyScore: 5,
+    sourceOrder: 1,
+  };
+
+  assert.deepEqual(getEligibleModeCandidates([wrong], "spell", now, studied), []);
+  assert.equal(
+    getDeferredSpellRetryCandidates([wrong], now, new Map([["apple", 1]]), 2)[0],
+    wrong
+  );
+  assert.deepEqual(
+    getDeferredSpellRetryCandidates([wrong], now, new Map([["apple", 2]]), 2),
+    []
+  );
+});
+
+test("认词听词答错排到次日，答对立即进入下一阶段", () => {
+  const now = new Date("2026-07-15T12:00:00Z");
+  const nextDay = new Date(now);
+  nextDay.setHours(0, 0, 0, 0);
+  nextDay.setDate(nextDay.getDate() + 1);
+
+  assert.equal(
+    getNextReviewAtAfterAnswer("recognize", "wrong", false, now).toISOString(),
+    nextDay.toISOString()
+  );
+  assert.equal(
+    getNextReviewAtAfterAnswer("listen", "wrong", false, now).toISOString(),
+    nextDay.toISOString()
+  );
+  assert.equal(
+    getNextReviewAtAfterAnswer("recognize", "correct", false, now).toISOString(),
+    now.toISOString()
+  );
+  assert.equal(
+    getNextReviewAtAfterAnswer("spell", "wrong", false, now).toISOString(),
+    now.toISOString()
+  );
 });
 
 test("旧学习 key 只在失效时按当前词库规范化", () => {

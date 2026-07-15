@@ -49,6 +49,7 @@ const WORD_MAP_FILTERS = [
   { key: "recognize", label: "认词中" },
   { key: "listen", label: "听词中" },
   { key: "spell", label: "拼写中" },
+  { key: "spell-retry", label: "拼写待重试" },
   { key: "mastered", label: "已掌握" },
   { key: "repeated", label: "反复错" },
 ];
@@ -397,8 +398,7 @@ async function loadCheckinMonth(offset) {
 }
 
 function renderProgress() {
-  const { progress, config } = state.overview;
-  const spellMinScore = Number(config.spellFrequencyMinScore).toFixed(2);
+  const { progress } = state.overview;
 
   progressPanel.innerHTML = `
     <h2>学习进度</h2>
@@ -432,7 +432,7 @@ function renderProgress() {
         <div class="bar"><div class="bar-fill" style="width:${formatPercent(progress.spellMastered, progress.spellGoalCount)}"></div></div>
       </div>
     </div>
-    <p class="muted">总词库一共有 ${progress.totalWords} 个词。已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个学习阶段；认词和听词按全部词库统计，日常词频不低于 ${spellMinScore} 的单词会继续进入默写训练。</p>
+    <p class="muted">总词库一共有 ${progress.totalWords} 个词。已完成 ${progress.completedStageUnits}/${progress.totalStageUnits} 个学习阶段；所有词都练认词和听词，纯字母或数字的单个词继续进入拼写，含空格、短划线、点等符号的词组不拼写。</p>
   `;
 }
 

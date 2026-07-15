@@ -1229,7 +1229,7 @@ input {
 }
 
 .word-map-filter.status-all .word-map-swatch {
-  background: conic-gradient(#d9dfe3 0 20%, #b9d5fb 0 40%, #ffe29a 0 60%, #d9cdfa 0 80%, #bfe2b8 0);
+  background: conic-gradient(#d9dfe3 0 16.67%, #b9d5fb 0 33.33%, #ffe29a 0 50%, #d9cdfa 0 66.67%, #f5b7b1 0 83.33%, #bfe2b8 0);
 }
 
 .word-map-filter.status-unseen .word-map-swatch,
@@ -1250,6 +1250,11 @@ input {
 .word-map-filter.status-spell .word-map-swatch,
 .word-map-cell.status-spell {
   background: #d9cdfa;
+}
+
+.word-map-filter.status-spell-retry .word-map-swatch,
+.word-map-cell.status-spell-retry {
+  background: #f5b7b1;
 }
 
 .word-map-filter.status-mastered .word-map-swatch,

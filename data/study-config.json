@@ -18,15 +18,9 @@
     "spell"
   ],
   "wrongParkDays": {
-    "recognize": 3,
-    "listen": 3,
-    "spell": 7
+    "recognize": 1,
+    "listen": 1,
+    "spell": 0
   },
-  "dailyWrongRetryLimits": {
-    "recognize": 6,
-    "listen": 4,
-    "spell": 3
-  },
-  "repeatedWrongThreshold": 3,
-  "spellFrequencyMinScore": 5.5
+  "repeatedWrongThreshold": 3
 }
