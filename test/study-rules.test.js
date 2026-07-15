@@ -2,9 +2,10 @@ const assert = require("node:assert/strict");
 const { DatabaseSync } = require("node:sqlite");
 const test = require("node:test");
 const { normalizeStudyConfig } = require("../lib/study-config");
-const { getLearningTarget } = require("../lib/study-progress");
+const { getLearningTarget, isRepeatedWrong } = require("../lib/study-progress");
 const {
   getModeOrderForToday,
+  getWordMapStatus,
   isParkedAfterWrong,
   sortStudyCandidates,
 } = require("../lib/study-selection");
@@ -23,8 +24,43 @@ test("学习配置统一提供每日目标和复习规则", () => {
     listen: 3,
     spell: 7,
   });
+  assert.equal(config.repeatedWrongThreshold, 3);
   assert.equal(config.spellFrequencyMinScore, 5.5);
   assert.equal(config.afterTargetSequence.length, 9);
+});
+
+test("家长掌握地图按当前学习阶段显示稳定状态", () => {
+  const base = {
+    firstSeenAt: "2026-07-15T00:00:00Z",
+    learningTarget: "spell",
+    recognitionStage: 0,
+    listeningStage: 0,
+    spellingStage: 0,
+  };
+
+  assert.equal(getWordMapStatus({ ...base, firstSeenAt: null }), "unseen");
+  assert.equal(getWordMapStatus(base), "recognize");
+  assert.equal(getWordMapStatus({ ...base, recognitionStage: 1 }), "listen");
+  assert.equal(
+    getWordMapStatus({ ...base, recognitionStage: 1, listeningStage: 1 }),
+    "spell"
+  );
+  assert.equal(
+    getWordMapStatus({
+      ...base,
+      recognitionStage: 1,
+      listeningStage: 1,
+      spellingStage: 2,
+    }),
+    "mastered"
+  );
+});
+
+test("累计错三次才标记为反复错词", () => {
+  const config = normalizeStudyConfig({ repeatedWrongThreshold: 3 });
+
+  assert.equal(isRepeatedWrong({ timesWrong: 2 }, config), false);
+  assert.equal(isRepeatedWrong({ timesWrong: 3 }, config), true);
 });
 
 test("只有达到词频线的单个单词进入拼写", () => {

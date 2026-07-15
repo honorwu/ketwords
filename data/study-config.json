@@ -27,5 +27,6 @@
     "listen": 4,
     "spell": 3
   },
+  "repeatedWrongThreshold": 3,
   "spellFrequencyMinScore": 5.5
 }

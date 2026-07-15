@@ -42,6 +42,19 @@ const studyPlanMini = document.querySelector("#studyPlanMini");
 const studyPanel = document.querySelector("#studyPanel");
 const startStudyButton = document.querySelector("#startStudyButton");
 const endStudyButton = document.querySelector("#endStudyButton");
+
+const WORD_MAP_FILTERS = [
+  { key: "all", label: "全部" },
+  { key: "unseen", label: "未学习" },
+  { key: "recognize", label: "认词中" },
+  { key: "listen", label: "听词中" },
+  { key: "spell", label: "拼写中" },
+  { key: "mastered", label: "已掌握" },
+  { key: "repeated", label: "反复错" },
+];
+const WORD_MAP_STATUS_LABELS = Object.fromEntries(
+  WORD_MAP_FILTERS.map((item) => [item.key, item.label])
+);
 const {
   showEndStudyConfirmModal,
   showStudySummaryModal,
@@ -457,6 +470,13 @@ function renderParentDashboard() {
     cumulative.totalMinutes,
     cumulative.totalElapsedMs
   );
+  const repeatedWrongThreshold = state.overview.config.repeatedWrongThreshold;
+  const repeatedWrongWords = state.overview.hardWords.filter(
+    (item) => item.wrongCount >= repeatedWrongThreshold
+  );
+  const attentionWords = (
+    repeatedWrongWords.length > 0 ? repeatedWrongWords : state.overview.hardWords
+  ).slice(0, 6);
 
   parentStats.innerHTML = [
     buildMetricCard("学习时长", `${todayMinutes} / ${cumulativeMinutes} 分钟`, `今日 / 累计，今天完成 ${today.cards} 次答题`),
@@ -519,22 +539,23 @@ function renderParentDashboard() {
   `;
 
   mistakePanel.innerHTML = `
-    <h2>全部错词${state.overview.hardWords.length ? `（${state.overview.hardWords.length} 个）` : ""}</h2>
+    <h2>重点关注</h2>
+    <p class="muted">反复错 ${repeatedWrongWords.length} 个（累计错 ${repeatedWrongThreshold} 次以上），有过错题 ${state.overview.hardWords.length} 个。</p>
     ${
-      state.overview.hardWords.length === 0
-        ? `<p class="muted">目前还没有错词。</p>`
+      attentionWords.length === 0
+        ? `<p class="muted">目前还没有错词，继续保持。</p>`
         : `<div class="list mistake-list">
-            ${state.overview.hardWords
+            ${attentionWords
               .map(
                 (item) => `
                   <div class="list-item">
                     <div>
-                      <strong>${item.term}</strong>
-                      <div class="word-meta">${item.meaning || "释义会在首次学习时自动补全"}</div>
+                      <strong>${escapeHtml(item.term)}</strong>
+                      <div class="word-meta">${escapeHtml(item.meaning || "释义会在首次学习时自动补全")}</div>
                     </div>
                     <div>
                       <strong>${item.wrongCount} 次</strong>
-                      <div class="word-meta">${item.mastery}</div>
+                      <div class="word-meta">${escapeHtml(item.mastery)}</div>
                     </div>
                   </div>
                 `
@@ -542,79 +563,184 @@ function renderParentDashboard() {
               .join("")}
           </div>`
     }
+    ${repeatedWrongWords.length > 0 ? `
+      <div class="action-row mistake-map-action">
+        <button type="button" class="secondary-btn" id="showRepeatedWordsButton">在地图中查看全部反复错词</button>
+      </div>
+    ` : ""}
   `;
+
+  mistakePanel.querySelector("#showRepeatedWordsButton")?.addEventListener("click", async () => {
+    state.parentWordStatusFilter = "repeated";
+    state.parentWordFilter = "";
+    state.parentWordSelectedId = null;
+    await ensureParentWords();
+    renderParentWordPanel({ preserveMapScroll: false });
+    wordProgressPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
-function renderParentWordPanel() {
-  const filter = state.parentWordFilter.trim().toLowerCase();
-  const filteredWords = state.parentWords.filter((item) => {
-    if (!filter) {
-      return true;
-    }
+function renderParentWordPanel({
+  focusSearch = false,
+  focusWordId = null,
+  preserveMapScroll = true,
+} = {}) {
+  const previousMap = wordProgressPanel.querySelector(".word-map-grid");
+  const previousScrollTop = preserveMapScroll ? previousMap?.scrollTop || 0 : 0;
+  const searchTerm = state.parentWordFilter.trim().toLowerCase();
+  const statusFilter = state.parentWordStatusFilter;
+  const repeatedWrongThreshold = numberValue(
+    state.overview?.config?.repeatedWrongThreshold
+  ) || 3;
+  const statusCounts = Object.fromEntries(
+    WORD_MAP_FILTERS.map((item) => [item.key, 0])
+  );
 
-    return `${item.term} ${item.meaning} ${item.theme} ${item.mastery}`
-      .toLowerCase()
-      .includes(filter);
+  statusCounts.all = state.parentWords.length;
+  state.parentWords.forEach((item) => {
+    statusCounts[item.mapStatus] = (statusCounts[item.mapStatus] || 0) + 1;
+    if (item.repeatedWrong) {
+      statusCounts.repeated += 1;
+    }
   });
 
+  const filteredWords = state.parentWords.filter((item) => {
+    const matchesStatus = statusFilter === "all"
+      || (statusFilter === "repeated" ? item.repeatedWrong : item.mapStatus === statusFilter);
+    const matchesSearch = !searchTerm
+      || `${item.term} ${item.meaning} ${item.theme} ${item.mastery} ${item.stageSummary}`
+        .toLowerCase()
+        .includes(searchTerm);
+
+    return matchesStatus && matchesSearch;
+  });
+  const selectedWord = state.parentWords.find(
+    (item) => Number(item.wordId) === Number(state.parentWordSelectedId)
+  );
+
   wordProgressPanel.innerHTML = `
-    <div class="word-progress-toolbar">
+    <div class="word-map-toolbar">
       <div>
-        <h2>单词掌握明细</h2>
-        <div class="muted">可以查看每个词当前的学习阶段、掌握程度和累计答题次数。</div>
+        <h2>词汇掌握地图</h2>
+        <div class="muted">每格一个词，底色表示当前阶段；右上角红点表示累计错 ${repeatedWrongThreshold} 次以上。</div>
       </div>
-      <input
-        class="word-filter"
-        id="wordFilterInput"
-        placeholder="搜索单词、中文或主题"
-        value="${escapeHtml(state.parentWordFilter)}"
-      />
+      <label class="word-search">
+        <span class="visually-hidden">搜索单词</span>
+        <input
+          class="word-filter"
+          id="wordFilterInput"
+          placeholder="搜索单词、中文或主题"
+          value="${escapeHtml(state.parentWordFilter)}"
+        />
+      </label>
+    </div>
+    <div class="word-map-filters" role="group" aria-label="筛选单词状态">
+      ${WORD_MAP_FILTERS.map(
+        (filter) => `
+          <button
+            type="button"
+            class="word-map-filter status-${filter.key}${statusFilter === filter.key ? " active" : ""}"
+            data-word-map-filter="${filter.key}"
+            aria-pressed="${statusFilter === filter.key}"
+          >
+            <span class="word-map-swatch" aria-hidden="true"></span>
+            <span>${filter.label}</span>
+            <strong>${statusCounts[filter.key] || 0}</strong>
+          </button>
+        `
+      ).join("")}
+    </div>
+    ${selectedWord ? `
+      <section class="word-map-selection" aria-label="已选单词详情">
+        <div class="word-map-selection-heading">
+          <div>
+            <strong>${escapeHtml(selectedWord.term)}</strong>
+            <span>${escapeHtml(selectedWord.meaning || "中文释义待补充")}</span>
+          </div>
+          <button type="button" class="word-map-selection-close" id="closeWordSelection" aria-label="关闭单词详情">×</button>
+        </div>
+        <div class="word-map-selection-facts">
+          <span><b>当前阶段</b>${escapeHtml(WORD_MAP_STATUS_LABELS[selectedWord.mapStatus] || selectedWord.mastery)}</span>
+          <span><b>掌握度</b>${selectedWord.masteryPercent}%</span>
+          <span><b>答题记录</b>${selectedWord.timesSeen} 次，错 ${selectedWord.timesWrong} 次</span>
+          <span><b>日常词频</b>${escapeHtml(frequencyLabel(selectedWord.frequencyScore).replace("日常词频 ", ""))}</span>
+          <span><b>阶段进度</b>${escapeHtml(selectedWord.stageSummary)}</span>
+          <span><b>下一步</b>${escapeHtml(selectedWord.nextAction)}</span>
+        </div>
+      </section>
+    ` : ""}
+    <div class="word-map-result-line" aria-live="polite">
+      <strong>显示 ${filteredWords.length} / ${state.parentWords.length} 个词</strong>
+      <span>按词表顺序固定排列，筛选不会改变单词状态。</span>
     </div>
     ${
       state.parentWordsLoading
-        ? `<p class="muted">正在加载单词明细…</p>`
+        ? `<p class="muted">正在加载词汇掌握地图…</p>`
         : filteredWords.length === 0
-          ? `<p class="muted">没有匹配到单词。</p>`
-          : `<div class="word-table">
-              <div class="word-row header">
-                <div>单词</div>
-                <div>日常词频</div>
-                <div>掌握度</div>
-                <div>阶段</div>
-                <div>答题次数</div>
-                <div>下一步</div>
-              </div>
-              ${filteredWords
-                .map(
-                  (item) => `
-                    <div class="word-row">
-                      <div class="word-cell-main">
-                        <strong>${escapeHtml(item.term)}</strong>
-                        <div class="word-meta">${escapeHtml(item.meaning || "中文会在学习时逐步补全")}</div>
-                      </div>
-                      <div>${escapeHtml(frequencyLabel(item.frequencyScore))}</div>
-                      <div>
-                        <div>${item.masteryPercent}% · ${escapeHtml(item.mastery)}</div>
-                        <div class="tiny-bar"><div class="tiny-bar-fill" style="width:${item.masteryPercent}%"></div></div>
-                      </div>
-                      <div>${escapeHtml(item.stageSummary)}</div>
-                      <div>${item.timesSeen}</div>
-                      <div>${escapeHtml(item.nextAction)}</div>
-                    </div>
-                  `
-                )
-                .join("")}
+          ? `<div class="word-map-empty">没有匹配到单词，可以换一个状态或清空搜索。</div>`
+          : `<div class="word-map-grid" role="list" aria-label="词汇掌握地图">
+              ${filteredWords.map((item) => {
+                const statusLabel = WORD_MAP_STATUS_LABELS[item.mapStatus] || item.mastery;
+                const repeatedLabel = item.repeatedWrong ? `，反复错词，累计错 ${item.timesWrong} 次` : "";
+                const isSelected = Number(item.wordId) === Number(state.parentWordSelectedId);
+
+                return `
+                  <button
+                    type="button"
+                    role="listitem"
+                    class="word-map-cell status-${item.mapStatus}${item.repeatedWrong ? " is-repeated-wrong" : ""}${isSelected ? " is-selected" : ""}"
+                    data-word-id="${item.wordId}"
+                    aria-pressed="${isSelected}"
+                    aria-label="${escapeHtml(`${item.term}，${statusLabel}${repeatedLabel}，${item.meaning || "暂无中文释义"}`)}"
+                    title="${escapeHtml(`${item.term} · ${statusLabel}${repeatedLabel}`)}"
+                  ><span>${escapeHtml(item.term)}</span></button>
+                `;
+              }).join("")}
             </div>`
     }
   `;
 
-  const input = wordProgressPanel.querySelector("#wordFilterInput");
+  const map = wordProgressPanel.querySelector(".word-map-grid");
+  if (map) {
+    map.scrollTop = previousScrollTop;
+  }
 
+  const input = wordProgressPanel.querySelector("#wordFilterInput");
   if (input) {
     input.addEventListener("input", (event) => {
       state.parentWordFilter = event.target.value;
-      renderParentWordPanel();
+      state.parentWordSelectedId = null;
+      renderParentWordPanel({ focusSearch: true });
     });
+    if (focusSearch) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }
+
+  wordProgressPanel.querySelectorAll("[data-word-map-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.parentWordStatusFilter = button.dataset.wordMapFilter;
+      state.parentWordSelectedId = null;
+      renderParentWordPanel({ preserveMapScroll: false });
+    });
+  });
+
+  wordProgressPanel.querySelectorAll("[data-word-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const wordId = Number(button.dataset.wordId);
+      state.parentWordSelectedId = wordId;
+      renderParentWordPanel({ focusWordId: wordId });
+    });
+  });
+
+  wordProgressPanel.querySelector("#closeWordSelection")?.addEventListener("click", () => {
+    state.parentWordSelectedId = null;
+    renderParentWordPanel();
+  });
+
+  if (focusWordId) {
+    wordProgressPanel.querySelector(`[data-word-id="${focusWordId}"]`)?.focus({ preventScroll: true });
   }
 }
 

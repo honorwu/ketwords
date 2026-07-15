@@ -11,6 +11,8 @@ export const state = {
   parentWordsNeedRefresh: true,
   parentWordsLoading: false,
   parentWordFilter: "",
+  parentWordStatusFilter: "all",
+  parentWordSelectedId: null,
   answerSubmitting: false,
   cardLoading: false,
   studyTimerStartedAt: 0,
