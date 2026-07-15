@@ -268,8 +268,7 @@ function applyLocalStudyAttempt(mode, previousToday) {
 }
 
 function renderHero() {
-  const { exam, checkin, config, progress, today } = state.overview;
-  const targets = config.dailyTargets;
+  const { exam, checkin, progress, today } = state.overview;
   const leadingBlanks = Array.from({ length: checkin.firstWeekday }, () => null);
   const monthCells = [...leadingBlanks, ...checkin.monthDays];
 
@@ -289,9 +288,9 @@ function renderHero() {
           <div class="hero-metric">
             <div class="metric-label">今天进度</div>
             <div class="today-targets">
-              <span><strong>${today.recognizeCards}/${targets.recognize}</strong> 认</span>
-              <span><strong>${today.listenCards}/${targets.listen}</strong> 听</span>
-              <span><strong>${today.spellCards}/${targets.spell}</strong> 拼</span>
+              <span><strong>${today.recognizeCards}</strong> 认</span>
+              <span><strong>${today.listenCards}</strong> 听</span>
+              <span><strong>${today.spellCards}</strong> 拼</span>
             </div>
           </div>
           <div class="hero-metric">
@@ -754,15 +753,14 @@ function renderStudyPlanMini() {
   }
 
   const today = getStudyDisplayToday();
-  const targets = state.overview.config.dailyTargets;
 
   studyPlanMini.className = "study-plan-mini";
   studyPlanMini.innerHTML = `
     <div class="mini-line timer-line"><strong>${state.studyElapsedSeconds}</strong> 秒学习</div>
     <div class="mini-line"><strong>${numberValue(today.cards)}</strong> 次回答</div>
-    <div class="mini-line"><strong>${numberValue(today.recognizeCards)}/${targets.recognize}</strong> 认词</div>
-    <div class="mini-line"><strong>${numberValue(today.listenCards)}/${targets.listen}</strong> 听词</div>
-    <div class="mini-line"><strong>${numberValue(today.spellCards)}/${targets.spell}</strong> 拼写</div>
+    <div class="mini-line"><strong>${numberValue(today.recognizeCards)}</strong> 认词</div>
+    <div class="mini-line"><strong>${numberValue(today.listenCards)}</strong> 听词</div>
+    <div class="mini-line"><strong>${numberValue(today.spellCards)}</strong> 拼写</div>
   `;
 }
 

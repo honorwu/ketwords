@@ -12,7 +12,7 @@ const { applyResultToStages } = require("../lib/answer-evaluator");
 const {
   getDeferredSpellRetryCandidates,
   getEligibleModeCandidates,
-  getModeOrderForToday,
+  getModePriorityOrder,
   getNextReviewAtAfterAnswer,
   getWordMapStatus,
   isWordAvailableToday,
@@ -21,21 +21,17 @@ const {
 } = require("../lib/study-selection");
 const { normalizeLearningWordKeys } = require("../lib/store");
 
-test("学习配置统一提供每日目标和复习规则", () => {
+test("学习配置只保留日期和复习规则", () => {
   const config = normalizeStudyConfig({});
 
-  assert.deepEqual(config.dailyTargets, {
-    recognize: 60,
-    listen: 20,
-    spell: 10,
-  });
   assert.deepEqual(config.wrongParkDays, {
     recognize: 1,
     listen: 1,
     spell: 1,
   });
   assert.equal(config.repeatedWrongThreshold, 3);
-  assert.equal(config.afterTargetSequence.length, 9);
+  assert.equal("dailyTargets" in config, false);
+  assert.equal("afterTargetSequence" in config, false);
 });
 
 test("家长掌握地图按当前学习阶段显示稳定状态", () => {
@@ -122,14 +118,8 @@ test("学习队列先排未接触词，再按数值词频排序", () => {
   assert.deepEqual(candidates.map((candidate) => candidate.term), ["higher", "lower", "seen"]);
 });
 
-test("每日目标完成后按 6:2:1 继续加练", () => {
-  assert.equal(getModeOrderForToday({ cards: 0, recognizeCards: 0, listenCards: 0, spellCards: 0 })[0], "recognize");
-  assert.equal(getModeOrderForToday({ cards: 60, recognizeCards: 60, listenCards: 0, spellCards: 0 })[0], "listen");
-  assert.equal(getModeOrderForToday({ cards: 80, recognizeCards: 60, listenCards: 20, spellCards: 0 })[0], "spell");
-  assert.deepEqual(
-    getModeOrderForToday({ cards: 90, recognizeCards: 60, listenCards: 20, spellCards: 10 }).slice(0, 9),
-    ["recognize", "recognize", "recognize", "recognize", "recognize", "recognize", "listen", "listen", "spell"]
-  );
+test("选题固定按认词、听词、拼写排序", () => {
+  assert.deepEqual(getModePriorityOrder(), ["recognize", "listen", "spell"]);
 });
 
 test("认词听词和拼写错题都等待到第二天", () => {
