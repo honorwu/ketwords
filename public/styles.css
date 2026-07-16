@@ -1229,7 +1229,7 @@ input {
 }
 
 .word-map-filter.status-all .word-map-swatch {
-  background: conic-gradient(#d9dfe3 0 16.67%, #b9d5fb 0 33.33%, #ffe29a 0 50%, #d9cdfa 0 66.67%, #f5b7b1 0 83.33%, #bfe2b8 0);
+  background: conic-gradient(#d9dfe3 0 14.29%, #f5b7b1 0 28.57%, #cbe0fb 0 42.86%, #f8c98a 0 57.14%, #d9cdfa 0 71.43%, #e6b8d5 0 85.71%, #bfe2b8 0);
 }
 
 .word-map-filter.status-unseen .word-map-swatch,
@@ -1237,24 +1237,29 @@ input {
   background: #e9edef;
 }
 
-.word-map-filter.status-recognize .word-map-swatch,
-.word-map-cell.status-recognize {
+.word-map-filter.status-recognize-wrong .word-map-swatch,
+.word-map-cell.status-recognize-wrong {
+  background: #f5b7b1;
+}
+
+.word-map-filter.status-listen-pending .word-map-swatch,
+.word-map-cell.status-listen-pending {
   background: #cbe0fb;
 }
 
-.word-map-filter.status-listen .word-map-swatch,
-.word-map-cell.status-listen {
-  background: #ffe29a;
+.word-map-filter.status-listen-wrong .word-map-swatch,
+.word-map-cell.status-listen-wrong {
+  background: #f8c98a;
 }
 
-.word-map-filter.status-spell .word-map-swatch,
-.word-map-cell.status-spell {
+.word-map-filter.status-spell-pending .word-map-swatch,
+.word-map-cell.status-spell-pending {
   background: #d9cdfa;
 }
 
-.word-map-filter.status-spell-retry .word-map-swatch,
-.word-map-cell.status-spell-retry {
-  background: #f5b7b1;
+.word-map-filter.status-spell-wrong .word-map-swatch,
+.word-map-cell.status-spell-wrong {
+  background: #e6b8d5;
 }
 
 .word-map-filter.status-mastered .word-map-swatch,

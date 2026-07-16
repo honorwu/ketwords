@@ -44,11 +44,41 @@ test("家长掌握地图按当前学习阶段显示稳定状态", () => {
   };
 
   assert.equal(getWordMapStatus({ ...base, firstSeenAt: null }), "unseen");
-  assert.equal(getWordMapStatus(base), "recognize");
-  assert.equal(getWordMapStatus({ ...base, recognitionStage: 1 }), "listen");
   assert.equal(
-    getWordMapStatus({ ...base, recognitionStage: 1, listeningStage: 1 }),
-    "spell"
+    getWordMapStatus({
+      ...base,
+      lastMode: "recognize",
+      lastResult: "wrong",
+    }),
+    "recognize-wrong"
+  );
+  assert.equal(
+    getWordMapStatus({
+      ...base,
+      recognitionStage: 1,
+      lastMode: "recognize",
+      lastResult: "correct",
+    }),
+    "listen-pending"
+  );
+  assert.equal(
+    getWordMapStatus({
+      ...base,
+      recognitionStage: 1,
+      lastMode: "listen",
+      lastResult: "wrong",
+    }),
+    "listen-wrong"
+  );
+  assert.equal(
+    getWordMapStatus({
+      ...base,
+      recognitionStage: 1,
+      listeningStage: 1,
+      lastMode: "listen",
+      lastResult: "correct",
+    }),
+    "spell-pending"
   );
   assert.equal(
     getWordMapStatus({
@@ -67,7 +97,18 @@ test("家长掌握地图按当前学习阶段显示稳定状态", () => {
       lastMode: "spell",
       lastResult: "wrong",
     }),
-    "spell-retry"
+    "spell-wrong"
+  );
+  assert.equal(
+    getWordMapStatus({
+      ...base,
+      learningTarget: "listen",
+      recognitionStage: 1,
+      listeningStage: 1,
+      lastMode: "listen",
+      lastResult: "correct",
+    }),
+    "mastered"
   );
 });
 

@@ -46,10 +46,11 @@ const endStudyButton = document.querySelector("#endStudyButton");
 const WORD_MAP_FILTERS = [
   { key: "all", label: "全部" },
   { key: "unseen", label: "未学习" },
-  { key: "recognize", label: "认词中" },
-  { key: "listen", label: "听词中" },
-  { key: "spell", label: "拼写中" },
-  { key: "spell-retry", label: "拼写待重试" },
+  { key: "recognize-wrong", label: "认词错误" },
+  { key: "listen-pending", label: "待听词" },
+  { key: "listen-wrong", label: "听词错误" },
+  { key: "spell-pending", label: "待拼写" },
+  { key: "spell-wrong", label: "拼写错误" },
   { key: "mastered", label: "已掌握" },
   { key: "repeated", label: "反复错" },
 ];
