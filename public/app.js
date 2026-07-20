@@ -463,6 +463,33 @@ function renderFocusWords() {
   `;
 }
 
+function renderWrongWordRanking(title, items) {
+  return `
+    <section class="wrong-ranking-group">
+      <h3>${escapeHtml(title)}</h3>
+      ${items.length === 0
+        ? `<p class="muted">目前还没有这个阶段的错题。</p>`
+        : `<div class="list wrong-ranking-list">
+            ${items.map((item, index) => `
+              <div class="list-item wrong-ranking-item">
+                <div class="wrong-ranking-word">
+                  <span class="wrong-ranking-position">${index + 1}</span>
+                  <div>
+                    <strong>${escapeHtml(item.term)}</strong>
+                    <div class="word-meta">${escapeHtml(item.meaning || "暂无中文释义")}</div>
+                  </div>
+                </div>
+                <div class="wrong-ranking-score">
+                  <strong>错 ${item.wrongCount} 次</strong>
+                  <div class="word-meta">${item.wrongCount}/${item.attemptCount} · ${item.errorRate}%</div>
+                </div>
+              </div>
+            `).join("")}
+          </div>`}
+    </section>
+  `;
+}
+
 function renderParentDashboard() {
   const { progress, today, cumulative } = state.overview;
   const todayMinutes = formatMinutesValue(today.minutes);
@@ -474,9 +501,13 @@ function renderParentDashboard() {
   const repeatedWrongWords = state.overview.hardWords.filter(
     (item) => item.wrongCount >= repeatedWrongThreshold
   );
-  const attentionWords = (
-    repeatedWrongWords.length > 0 ? repeatedWrongWords : state.overview.hardWords
-  ).slice(0, 6);
+  const wrongWordRankings = state.overview.wrongWordRankings || {};
+  const recognizeWrongWords = Array.isArray(wrongWordRankings.recognize)
+    ? wrongWordRankings.recognize
+    : [];
+  const listenWrongWords = Array.isArray(wrongWordRankings.listen)
+    ? wrongWordRankings.listen
+    : [];
 
   parentStats.innerHTML = [
     buildMetricCard("学习时长", `${todayMinutes} / ${cumulativeMinutes} 分钟`, `今日 / 累计，今天完成 ${today.cards} 次答题`),
@@ -539,30 +570,12 @@ function renderParentDashboard() {
   `;
 
   mistakePanel.innerHTML = `
-    <h2>重点关注</h2>
-    <p class="muted">反复错 ${repeatedWrongWords.length} 个（累计错 ${repeatedWrongThreshold} 次以上），有过错题 ${state.overview.hardWords.length} 个。</p>
-    ${
-      attentionWords.length === 0
-        ? `<p class="muted">目前还没有错词，继续保持。</p>`
-        : `<div class="list mistake-list">
-            ${attentionWords
-              .map(
-                (item) => `
-                  <div class="list-item">
-                    <div>
-                      <strong>${escapeHtml(item.term)}</strong>
-                      <div class="word-meta">${escapeHtml(item.meaning || "释义会在首次学习时自动补全")}</div>
-                    </div>
-                    <div>
-                      <strong>${item.wrongCount} 次</strong>
-                      <div class="word-meta">${escapeHtml(item.mastery)}</div>
-                    </div>
-                  </div>
-                `
-              )
-              .join("")}
-          </div>`
-    }
+    <h2>错误最高的单词</h2>
+    <p class="muted">按累计错误次数排序；每项第二行显示错误次数/答题次数和错误率。反复错 ${repeatedWrongWords.length} 个（累计错 ${repeatedWrongThreshold} 次以上）。</p>
+    <div class="mode-wrong-rankings">
+      ${renderWrongWordRanking("认词错误榜", recognizeWrongWords)}
+      ${renderWrongWordRanking("听词错误榜", listenWrongWords)}
+    </div>
     ${repeatedWrongWords.length > 0 ? `
       <div class="action-row mistake-map-action">
         <button type="button" class="secondary-btn" id="showRepeatedWordsButton">在地图中查看全部反复错词</button>

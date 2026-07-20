@@ -190,11 +190,27 @@ test("答题结果严格决定当前阶段是否通过", () => {
     0
   );
   assert.equal(applyResultToStages(state, "listen", "correct").listeningStage, 1);
+  assert.deepEqual(
+    applyResultToStages(
+      {
+        recognitionStage: 1,
+        listeningStage: 1,
+        spellingStage: 1,
+      },
+      "listen",
+      "wrong"
+    ),
+    {
+      recognitionStage: 0,
+      listeningStage: 0,
+      spellingStage: 0,
+    }
+  );
   assert.equal(applyResultToStages(state, "spell", "correct").spellingStage, 1);
 });
 
-test("同一个词当天无论哪个阶段都只能出现一次", () => {
-  const state = { normalizedTerm: "apple" };
+test("同一个显示词形当天无论义项和阶段都只能出现一次", () => {
+  const state = { baseTerm: "apple", normalizedTerm: "apple" };
   const studied = {
     recognize: new Set(["apple"]),
     listen: new Set(),
@@ -202,7 +218,59 @@ test("同一个词当天无论哪个阶段都只能出现一次", () => {
   };
 
   assert.equal(isWordAvailableToday(state, studied), false);
-  assert.equal(isWordAvailableToday({ normalizedTerm: "banana" }, studied), true);
+  assert.equal(
+    isWordAvailableToday(
+      { baseTerm: "design", normalizedTerm: "design 408" },
+      { ...studied, recognize: new Set(["design"]) }
+    ),
+    false
+  );
+  assert.equal(
+    isWordAvailableToday({ baseTerm: "banana", normalizedTerm: "banana" }, studied),
+    true
+  );
+});
+
+test("听词答错后从认词阶段作为错词优先重学", () => {
+  const now = new Date("2026-07-16T12:00:00Z");
+  const studied = { recognize: new Set(), listen: new Set(), spell: new Set() };
+  const listenWrong = {
+    wordId: 1,
+    baseTerm: "design",
+    normalizedTerm: "design 407",
+    learningTarget: "spell",
+    firstSeenAt: "2026-07-14T00:00:00Z",
+    lastSeenAt: "2026-07-15T00:00:00Z",
+    nextReviewAt: "2026-07-16T00:00:00Z",
+    lastMode: "listen",
+    lastResult: "wrong",
+    recognitionStage: 0,
+    listeningStage: 0,
+    spellingStage: 0,
+    frequencyScore: 1,
+    sourceOrder: 2,
+  };
+  const unseen = {
+    ...listenWrong,
+    wordId: 2,
+    baseTerm: "apple",
+    normalizedTerm: "apple",
+    firstSeenAt: null,
+    lastSeenAt: null,
+    nextReviewAt: null,
+    lastMode: null,
+    lastResult: null,
+    frequencyScore: 9,
+    sourceOrder: 1,
+  };
+
+  assert.equal(getWordMapStatus(listenWrong), "listen-wrong");
+  assert.deepEqual(
+    getEligibleModeCandidates([unseen, listenWrong], "recognize", now, studied).map(
+      (item) => item.normalizedTerm
+    ),
+    ["design 407", "apple"]
+  );
 });
 
 test("到期的认词听词错题排在普通候选项之前", () => {
